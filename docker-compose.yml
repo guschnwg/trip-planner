@@ -1,0 +1,16 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    volumes:
+      - ./src/static:/app/src/static
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./src/server.js
+          target: /app/src/server.js
+        - action: rebuild
+          path: package.json
