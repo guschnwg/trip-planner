@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import {
   EVENT_TYPES,
   addEvent,
+  getAllEvents,
   parseDateTime,
   removeEvent,
   toISODateTime,
@@ -88,6 +89,62 @@ const closeResults = (field) => {
   s.open = false;
   s.results = [];
   s.error = '';
+};
+
+// Build a deduplicated list of places already used in the current trip's
+// events, so the user can reuse them instead of re-searching.
+const existingPlaces = computed(() => {
+  const tripId = props.tripId;
+  const all = getAllEvents();
+  const seen = new Map();
+  const add = (name, coords, kind) => {
+    if (!name || !coords || !Number.isFinite(coords.lng) || !Number.isFinite(coords.lat)) {
+      return;
+    }
+    const key = `${name.trim().toLowerCase()}|${coords.lng.toFixed(4)}|${coords.lat.toFixed(4)}`;
+    if (!seen.has(key)) {
+      seen.set(key, { name: name.trim(), coords: { lng: coords.lng, lat: coords.lat }, kind });
+    }
+  };
+  for (const raw of all) {
+    if (tripId && raw.tripId && raw.tripId !== tripId) continue;
+    if (raw.type === 'commute') {
+      add(raw.placeFrom, raw.placeFromCoords, 'from');
+      add(raw.placeTo, raw.placeToCoords, 'to');
+    } else {
+      add(raw.place, raw.placeCoords, 'place');
+    }
+  }
+  return Array.from(seen.values()).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+});
+
+const existingOpen = reactive({ place: false, placeFrom: false, placeTo: false });
+
+const closeExisting = (field) => {
+  existingOpen[field] = false;
+};
+
+const applyExisting = (field, entry) => {
+  if (field === 'place') {
+    form.place = entry.name;
+    form.placeCoords = { lng: entry.coords.lng, lat: entry.coords.lat };
+  } else if (field === 'placeFrom') {
+    form.placeFrom = entry.name;
+    form.placeFromCoords = { lng: entry.coords.lng, lat: entry.coords.lat };
+  } else if (field === 'placeTo') {
+    form.placeTo = entry.name;
+    form.placeToCoords = { lng: entry.coords.lng, lat: entry.coords.lat };
+  }
+  closeExisting(field);
+  const map = getMap();
+  if (map) {
+    map.flyTo({
+      center: [entry.coords.lng, entry.coords.lat],
+      zoom: Math.max(map.getZoom(), 13),
+    });
+  }
 };
 
 const runSearch = async (field) => {
@@ -376,6 +433,16 @@ onBeforeUnmount(() => {
             >
               {{ placeFromPickInProgress ? 'Click on map…' : 'Pick on map' }}
             </button>
+            <button
+              type="button"
+              class="existing-btn"
+              :disabled="!existingPlaces.length"
+              :class="{ active: existingOpen.placeFrom }"
+              @click="existingOpen.placeFrom = !existingOpen.placeFrom"
+              :title="existingPlaces.length ? 'Reuse a place already used in this trip' : 'No saved places yet'"
+            >
+              Existing
+            </button>
           </div>
           <ul v-if="placeSearch.placeFrom.open" class="search-results">
             <li v-if="placeSearch.placeFrom.loading" class="search-status">Searching…</li>
@@ -399,6 +466,17 @@ onBeforeUnmount(() => {
               class="search-status"
             >
               No results.
+            </li>
+          </ul>
+          <ul v-if="existingOpen.placeFrom && existingPlaces.length" class="search-results existing-list">
+            <li
+              v-for="(entry, idx) in existingPlaces"
+              :key="`existing-from-${idx}-${entry.coords.lng}-${entry.coords.lat}`"
+            >
+              <button type="button" class="result" @mousedown.prevent="applyExisting('placeFrom', entry)">
+                <span class="result-name">{{ entry.name }}</span>
+                <span class="result-kind">{{ entry.kind }}</span>
+              </button>
             </li>
           </ul>
         </div>
@@ -436,6 +514,16 @@ onBeforeUnmount(() => {
             >
               {{ placeToPickInProgress ? 'Click on map…' : 'Pick on map' }}
             </button>
+            <button
+              type="button"
+              class="existing-btn"
+              :disabled="!existingPlaces.length"
+              :class="{ active: existingOpen.placeTo }"
+              @click="existingOpen.placeTo = !existingOpen.placeTo"
+              :title="existingPlaces.length ? 'Reuse a place already used in this trip' : 'No saved places yet'"
+            >
+              Existing
+            </button>
           </div>
           <ul v-if="placeSearch.placeTo.open" class="search-results">
             <li v-if="placeSearch.placeTo.loading" class="search-status">Searching…</li>
@@ -459,6 +547,17 @@ onBeforeUnmount(() => {
               class="search-status"
             >
               No results.
+            </li>
+          </ul>
+          <ul v-if="existingOpen.placeTo && existingPlaces.length" class="search-results existing-list">
+            <li
+              v-for="(entry, idx) in existingPlaces"
+              :key="`existing-to-${idx}-${entry.coords.lng}-${entry.coords.lat}`"
+            >
+              <button type="button" class="result" @mousedown.prevent="applyExisting('placeTo', entry)">
+                <span class="result-name">{{ entry.name }}</span>
+                <span class="result-kind">{{ entry.kind }}</span>
+              </button>
             </li>
           </ul>
         </div>
@@ -497,6 +596,16 @@ onBeforeUnmount(() => {
           >
             {{ placePickInProgress ? 'Click on map…' : 'Pick on map' }}
           </button>
+          <button
+            type="button"
+            class="existing-btn"
+            :disabled="!existingPlaces.length"
+            :class="{ active: existingOpen.place }"
+            @click="existingOpen.place = !existingOpen.place"
+            :title="existingPlaces.length ? 'Reuse a place already used in this trip' : 'No saved places yet'"
+          >
+            Existing
+          </button>
         </div>
         <ul v-if="placeSearch.place.open" class="search-results">
           <li v-if="placeSearch.place.loading" class="search-status">Searching…</li>
@@ -520,6 +629,17 @@ onBeforeUnmount(() => {
             class="search-status"
           >
             No results.
+          </li>
+        </ul>
+        <ul v-if="existingOpen.place && existingPlaces.length" class="search-results existing-list">
+          <li
+            v-for="(entry, idx) in existingPlaces"
+            :key="`existing-place-${idx}-${entry.coords.lng}-${entry.coords.lat}`"
+          >
+            <button type="button" class="result" @mousedown.prevent="applyExisting('place', entry)">
+              <span class="result-name">{{ entry.name }}</span>
+              <span class="result-kind">{{ entry.kind }}</span>
+            </button>
           </li>
         </ul>
       </div>
@@ -791,6 +911,31 @@ onBeforeUnmount(() => {
   cursor: default;
 }
 
+.existing-btn {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid #6b7280;
+  background: #ffffff;
+  color: #6b7280;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.existing-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+}
+
+.existing-btn.active {
+  background: #6b7280;
+  color: #ffffff;
+}
+
+.existing-btn:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
 .search-results {
   list-style: none;
   margin: 4px 0 0;
@@ -825,6 +970,35 @@ onBeforeUnmount(() => {
 
 .search-results .result:hover {
   background: #f5f8ff;
+}
+
+.search-results .result {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.result-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-kind {
+  flex-shrink: 0;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #888;
+  background: #f3f4f6;
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+
+.existing-list .result {
+  justify-content: space-between;
 }
 
 .search-status {
