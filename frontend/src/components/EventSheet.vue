@@ -17,6 +17,9 @@ import {
 } from '../stores/mapState.js';
 import { getMap } from '../stores/mapState.js';
 import { searchPlaces } from '../lib/geocode.js';
+import { useI18n } from '../lib/useI18n.js';
+
+const { t } = useI18n();
 
 const props = defineProps({
   startDateTime: { type: String, default: '' },
@@ -30,6 +33,10 @@ const emit = defineEmits(['close', 'submitted', 'deleted']);
 const pad = (n) => String(n).padStart(2, '0');
 
 const isEdit = computed(() => !!props.event);
+
+const localizedEventTypes = computed(() =>
+  EVENT_TYPES.map((type) => ({ ...type, label: t(`eventTypes.${type.value}`) })),
+);
 
 const buildFormFromEvent = (event) => ({
   type: event.type,
@@ -91,8 +98,6 @@ const closeResults = (field) => {
   s.error = '';
 };
 
-// Build a deduplicated list of places already used in the current trip's
-// events, so the user can reuse them instead of re-searching.
 const existingPlaces = computed(() => {
   const tripId = props.tripId;
   const all = getAllEvents();
@@ -170,7 +175,7 @@ const runSearch = async (field) => {
     s.open = true;
   } catch (err) {
     if (err?.name === 'AbortError') return;
-    s.error = 'Search failed.';
+    s.error = t('eventSheet.errors.searchFailed');
     s.results = [];
     s.open = true;
   } finally {
@@ -304,16 +309,16 @@ const handleSubmit = () => {
   const start = parseDateTime(form.startDateTime);
   const end = parseDateTime(form.endDateTime);
   if (!start || !end || end <= start) {
-    error.value = 'End must be after start.';
+    error.value = t('eventSheet.errors.endBeforeStart');
     return;
   }
   if (isCommute.value) {
     if (!form.placeFrom && !form.placeTo) {
-      error.value = 'Pick at least a from or to place for the commute.';
+      error.value = t('eventSheet.errors.commuteNeedsPlace');
       return;
     }
   } else if (form.place && !form.placeCoords) {
-    error.value = 'Place is set but has no coordinates. Click the pick button to choose a location on the map.';
+    error.value = t('eventSheet.errors.placeNeedsCoords');
     return;
   }
 
@@ -367,40 +372,41 @@ onBeforeUnmount(() => {
 
 <template>
   <aside class="sheet" role="dialog" aria-modal="false" aria-labelledby="event-sheet-title">
+    <div class="sheet-glow" aria-hidden="true"></div>
     <header class="sheet-header">
-      <h2 id="event-sheet-title">{{ isEdit ? 'Edit event' : 'New event' }}</h2>
-      <button class="close-btn" type="button" @click="$emit('close')" aria-label="Close">
+      <h2 id="event-sheet-title">{{ isEdit ? t('eventSheet.editTitle') : t('eventSheet.newTitle') }}</h2>
+      <button class="close-btn" type="button" @click="$emit('close')" :aria-label="t('eventSheet.actions.close')">
         &times;
       </button>
     </header>
 
     <form class="sheet-body" @submit.prevent="handleSubmit">
-      <p class="hint">Type to search for a place, or use "Pick on map" to click a location.</p>
+      <p class="hint">{{ t('eventSheet.hint') }}</p>
 
       <label class="field">
-        <span class="field-label">Type</span>
-        <select v-model="form.type">
-          <option v-for="t in EVENT_TYPES" :key="t.value" :value="t.value">
+        <span class="field-label">{{ t('eventSheet.fields.type') }}</span>
+        <select class="tp-input" v-model="form.type">
+          <option v-for="t in localizedEventTypes" :key="t.value" :value="t.value">
             {{ t.label }}
           </option>
         </select>
       </label>
       <label class="field">
-        <span class="field-label">Start</span>
-        <input type="datetime-local" step="900" v-model="form.startDateTime" />
+        <span class="field-label">{{ t('eventSheet.fields.start') }}</span>
+        <input class="tp-input" type="datetime-local" step="900" v-model="form.startDateTime" />
       </label>
       <label class="field">
-        <span class="field-label">End</span>
-        <input type="datetime-local" step="900" v-model="form.endDateTime" />
+        <span class="field-label">{{ t('eventSheet.fields.end') }}</span>
+        <input class="tp-input" type="datetime-local" step="900" v-model="form.endDateTime" />
       </label>
 
       <label class="field">
-        <span class="field-label">Description</span>
-        <input type="text" v-model="form.description" placeholder="What is happening?" />
+        <span class="field-label">{{ t('eventSheet.fields.description') }}</span>
+        <input class="tp-input" type="text" v-model="form.description" :placeholder="t('eventSheet.fields.description')" />
       </label>
       <template v-if="isCommute">
         <div class="field">
-          <span class="field-label">Place from</span>
+          <span class="field-label">{{ t('eventSheet.fields.placeFrom') }}</span>
           <div v-if="form.placeFrom" class="selected-place">
             <span class="selected-place-name">{{ form.placeFrom }}</span>
             <button
@@ -410,19 +416,20 @@ onBeforeUnmount(() => {
                 form.placeFrom = '';
                 form.placeFromCoords = null;
               "
-              aria-label="Clear origin"
+              :aria-label="t('eventSheet.actions.clearOrigin')"
             >
               &times;
             </button>
           </div>
           <div class="place-search">
             <input
+              class="tp-input"
               type="text"
               v-model="placeSearch.placeFrom.query"
               @input="debouncedSearch('placeFrom')"
               @focus="runSearch('placeFrom')"
               @blur="setTimeout(() => closeResults('placeFrom'), 150)"
-              placeholder="Search origin…"
+              :placeholder="t('eventSheet.actions.searchOrigin')"
             />
             <button
               type="button"
@@ -431,7 +438,7 @@ onBeforeUnmount(() => {
               :disabled="placeFromPickInProgress"
               @click="beginPick('placeFrom')"
             >
-              {{ placeFromPickInProgress ? 'Click on map…' : 'Pick on map' }}
+              {{ placeFromPickInProgress ? t('eventSheet.actions.clickOnMap') : t('eventSheet.actions.pickOnMap') }}
             </button>
             <button
               type="button"
@@ -439,13 +446,13 @@ onBeforeUnmount(() => {
               :disabled="!existingPlaces.length"
               :class="{ active: existingOpen.placeFrom }"
               @click="existingOpen.placeFrom = !existingOpen.placeFrom"
-              :title="existingPlaces.length ? 'Reuse a place already used in this trip' : 'No saved places yet'"
+              :title="existingPlaces.length ? t('eventSheet.existing.reuseTitle') : t('eventSheet.existing.noSaved')"
             >
-              Existing
+              {{ t('eventSheet.actions.existing') }}
             </button>
           </div>
           <ul v-if="placeSearch.placeFrom.open" class="search-results">
-            <li v-if="placeSearch.placeFrom.loading" class="search-status">Searching…</li>
+            <li v-if="placeSearch.placeFrom.loading" class="search-status">{{ t('eventSheet.errors.searching') }}</li>
             <li v-else-if="placeSearch.placeFrom.error" class="search-status error">
               {{ placeSearch.placeFrom.error }}
             </li>
@@ -465,7 +472,7 @@ onBeforeUnmount(() => {
               "
               class="search-status"
             >
-              No results.
+              {{ t('eventSheet.errors.noResults') }}
             </li>
           </ul>
           <ul v-if="existingOpen.placeFrom && existingPlaces.length" class="search-results existing-list">
@@ -481,7 +488,7 @@ onBeforeUnmount(() => {
           </ul>
         </div>
         <div class="field">
-          <span class="field-label">Place to</span>
+          <span class="field-label">{{ t('eventSheet.fields.placeTo') }}</span>
           <div v-if="form.placeTo" class="selected-place">
             <span class="selected-place-name">{{ form.placeTo }}</span>
             <button
@@ -491,19 +498,20 @@ onBeforeUnmount(() => {
                 form.placeTo = '';
                 form.placeToCoords = null;
               "
-              aria-label="Clear destination"
+              :aria-label="t('eventSheet.actions.clearDestination')"
             >
               &times;
             </button>
           </div>
           <div class="place-search">
             <input
+              class="tp-input"
               type="text"
               v-model="placeSearch.placeTo.query"
               @input="debouncedSearch('placeTo')"
               @focus="runSearch('placeTo')"
               @blur="setTimeout(() => closeResults('placeTo'), 150)"
-              placeholder="Search destination…"
+              :placeholder="t('eventSheet.actions.searchDestination')"
             />
             <button
               type="button"
@@ -512,7 +520,7 @@ onBeforeUnmount(() => {
               :disabled="placeToPickInProgress"
               @click="beginPick('placeTo')"
             >
-              {{ placeToPickInProgress ? 'Click on map…' : 'Pick on map' }}
+              {{ placeToPickInProgress ? t('eventSheet.actions.clickOnMap') : t('eventSheet.actions.pickOnMap') }}
             </button>
             <button
               type="button"
@@ -520,13 +528,13 @@ onBeforeUnmount(() => {
               :disabled="!existingPlaces.length"
               :class="{ active: existingOpen.placeTo }"
               @click="existingOpen.placeTo = !existingOpen.placeTo"
-              :title="existingPlaces.length ? 'Reuse a place already used in this trip' : 'No saved places yet'"
+              :title="existingPlaces.length ? t('eventSheet.existing.reuseTitle') : t('eventSheet.existing.noSaved')"
             >
-              Existing
+              {{ t('eventSheet.actions.existing') }}
             </button>
           </div>
           <ul v-if="placeSearch.placeTo.open" class="search-results">
-            <li v-if="placeSearch.placeTo.loading" class="search-status">Searching…</li>
+            <li v-if="placeSearch.placeTo.loading" class="search-status">{{ t('eventSheet.errors.searching') }}</li>
             <li v-else-if="placeSearch.placeTo.error" class="search-status error">
               {{ placeSearch.placeTo.error }}
             </li>
@@ -546,7 +554,7 @@ onBeforeUnmount(() => {
               "
               class="search-status"
             >
-              No results.
+              {{ t('eventSheet.errors.noResults') }}
             </li>
           </ul>
           <ul v-if="existingOpen.placeTo && existingPlaces.length" class="search-results existing-list">
@@ -563,7 +571,7 @@ onBeforeUnmount(() => {
         </div>
       </template>
       <div v-else class="field">
-        <span class="field-label">Place</span>
+        <span class="field-label">{{ t('eventSheet.fields.place') }}</span>
         <div v-if="form.place" class="selected-place">
           <span class="selected-place-name">{{ form.place }}</span>
           <button
@@ -573,19 +581,20 @@ onBeforeUnmount(() => {
               form.place = '';
               form.placeCoords = null;
             "
-            aria-label="Clear place"
+            :aria-label="t('eventSheet.actions.clearPlace')"
           >
             &times;
           </button>
         </div>
         <div class="place-search">
           <input
+            class="tp-input"
             type="text"
             v-model="placeSearch.place.query"
             @input="debouncedSearch('place')"
             @focus="runSearch('place')"
             @blur="setTimeout(() => closeResults('place'), 150)"
-            placeholder="Search a place…"
+            :placeholder="t('eventSheet.actions.searchPlace')"
           />
           <button
             type="button"
@@ -594,7 +603,7 @@ onBeforeUnmount(() => {
             :disabled="placePickInProgress"
             @click="beginPick('place')"
           >
-            {{ placePickInProgress ? 'Click on map…' : 'Pick on map' }}
+            {{ placePickInProgress ? t('eventSheet.actions.clickOnMap') : t('eventSheet.actions.pickOnMap') }}
           </button>
           <button
             type="button"
@@ -602,13 +611,13 @@ onBeforeUnmount(() => {
             :disabled="!existingPlaces.length"
             :class="{ active: existingOpen.place }"
             @click="existingOpen.place = !existingOpen.place"
-            :title="existingPlaces.length ? 'Reuse a place already used in this trip' : 'No saved places yet'"
+            :title="existingPlaces.length ? t('eventSheet.existing.reuseTitle') : t('eventSheet.existing.noSaved')"
           >
-            Existing
+            {{ t('eventSheet.actions.existing') }}
           </button>
         </div>
         <ul v-if="placeSearch.place.open" class="search-results">
-          <li v-if="placeSearch.place.loading" class="search-status">Searching…</li>
+          <li v-if="placeSearch.place.loading" class="search-status">{{ t('eventSheet.errors.searching') }}</li>
           <li v-else-if="placeSearch.place.error" class="search-status error">
             {{ placeSearch.place.error }}
           </li>
@@ -628,7 +637,7 @@ onBeforeUnmount(() => {
             "
             class="search-status"
           >
-            No results.
+            {{ t('eventSheet.errors.noResults') }}
           </li>
         </ul>
         <ul v-if="existingOpen.place && existingPlaces.length" class="search-results existing-list">
@@ -645,9 +654,10 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="field">
-        <span class="field-label">Price</span>
+        <span class="field-label">{{ t('eventSheet.fields.price') }}</span>
         <div class="price-row">
           <input
+            class="tp-input"
             type="number"
             inputmode="decimal"
             min="0"
@@ -656,72 +666,78 @@ onBeforeUnmount(() => {
             v-model.number="form.price"
           />
           <input
+            class="tp-input currency-input"
             type="text"
-            class="currency-input"
             placeholder="USD"
             maxlength="4"
             v-model="form.currency"
           />
           <label class="paid-toggle">
             <input type="checkbox" v-model="form.isPaid" />
-            <span>{{ form.isPaid ? 'Paid' : 'Planned' }}</span>
+            <span>{{ form.isPaid ? t('eventSheet.paid.paid') : t('eventSheet.paid.planned') }}</span>
           </label>
         </div>
       </div>
 
       <div class="field">
         <div class="links-header">
-          <span class="field-label">Links</span>
+          <span class="field-label">{{ t('eventSheet.fields.links') }}</span>
           <button type="button" class="link-add" @click="addLink">
-            + Add link
+            {{ t('eventSheet.actions.addLink') }}
           </button>
         </div>
-        <div v-if="!form.links.length" class="links-empty">No links.</div>
-        <div
-          v-for="(link, idx) in form.links"
-          :key="`link-${idx}`"
-          class="link-row"
-        >
-          <input
-            type="text"
-            v-model="form.links[idx].label"
-            placeholder="Label"
-            class="link-label"
-            maxlength="80"
-          />
-          <input
-            type="url"
-            v-model="form.links[idx].url"
-            placeholder="https://…"
-            class="link-url"
-            maxlength="500"
-          />
-          <button
-            type="button"
-            class="link-remove"
-            @click="removeLink(idx)"
-            aria-label="Remove link"
+        <div v-if="!form.links.length" class="links-empty">{{ t('eventSheet.actions.noLinks') }}</div>
+        <TransitionGroup name="link-row" tag="div" class="links-list">
+          <div
+            v-for="(link, idx) in form.links"
+            :key="`link-${idx}-${link.url}`"
+            class="link-row"
           >
-            &times;
-          </button>
-        </div>
+            <input
+              class="tp-input link-label"
+              type="text"
+              v-model="form.links[idx].label"
+              :placeholder="t('eventSheet.actions.linkLabel')"
+              maxlength="80"
+            />
+            <input
+              class="tp-input link-url"
+              type="url"
+              v-model="form.links[idx].url"
+              :placeholder="t('eventSheet.actions.linkUrl')"
+              maxlength="500"
+            />
+            <button
+              type="button"
+              class="link-remove"
+              @click="removeLink(idx)"
+              :aria-label="t('eventSheet.actions.removeLink')"
+            >
+              &times;
+            </button>
+          </div>
+        </TransitionGroup>
       </div>
 
-      <p v-if="error" class="error">{{ error }}</p>
+      <Transition name="error-fade">
+        <p v-if="error" class="error">{{ error }}</p>
+      </Transition>
 
       <footer class="sheet-footer">
         <button
           v-if="isEdit"
           type="button"
-          class="btn btn-danger"
+          class="tp-btn tp-btn-danger"
           @click="handleDelete"
         >
-          Delete
+          {{ t('eventSheet.actions.delete') }}
         </button>
         <div class="footer-spacer"></div>
-        <button type="button" class="btn btn-secondary" @click="$emit('close')">Cancel</button>
-        <button type="submit" class="btn btn-primary">
-          {{ isEdit ? 'Save' : 'Add event' }}
+        <button type="button" class="tp-btn tp-btn-secondary" @click="$emit('close')">
+          {{ t('eventSheet.actions.cancel') }}
+        </button>
+        <button type="submit" class="tp-btn tp-btn-primary">
+          {{ isEdit ? t('eventSheet.actions.save') : t('eventSheet.actions.addEvent') }}
         </button>
       </footer>
     </form>
@@ -734,28 +750,53 @@ onBeforeUnmount(() => {
   top: 0;
   right: 0;
   height: 100vh;
-  width: 360px;
-  background: #ffffff;
-  border-left: 1px solid #e2e2e2;
-  box-shadow: -4px 0 16px rgba(15, 23, 42, 0.08);
+  width: 380px;
+  background: var(--color-surface);
+  -webkit-backdrop-filter: var(--glass-blur-strong);
+  backdrop-filter: var(--glass-blur-strong);
+  border-left: 1px solid var(--color-border);
+  box-shadow: -16px 0 40px rgba(15, 23, 42, 0.12);
   display: flex;
   flex-direction: column;
   z-index: 500;
+  overflow: hidden;
+}
+
+.sheet-glow {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -1px;
+  width: 2px;
+  background: linear-gradient(180deg,
+    transparent 0%,
+    var(--color-primary) 30%,
+    var(--color-accent) 70%,
+    transparent 100%);
+  pointer-events: none;
+  filter: blur(2px);
+  opacity: 0.7;
 }
 
 .sheet-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 18px;
-  border-bottom: 1px solid #ececec;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border-soft);
+  background: var(--color-surface-strong);
   flex-shrink: 0;
+  position: relative;
 }
 
 .sheet-header h2 {
   margin: 0;
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+  -webkit-background-clip: text;
+          background-clip: text;
+  color: transparent;
 }
 
 .close-btn {
@@ -763,20 +804,27 @@ onBeforeUnmount(() => {
   border: 0;
   font-size: 22px;
   line-height: 1;
-  color: #555;
+  color: var(--color-text-muted);
   cursor: pointer;
-  padding: 0 4px;
+  padding: 4px 8px;
+  border-radius: var(--radius-md);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-spring);
 }
 
 .close-btn:hover {
-  color: #1a1a1a;
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  transform: rotate(90deg);
 }
 
 .sheet-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px 18px;
+  gap: 14px;
+  padding: 18px 20px;
   overflow-y: auto;
   flex: 1;
 }
@@ -784,61 +832,39 @@ onBeforeUnmount(() => {
 .hint {
   margin: 0;
   font-size: 12px;
-  color: #555;
-  background: #f0f6ff;
-  border: 1px solid #c7d7fe;
-  padding: 8px 10px;
-  border-radius: 6px;
-}
-
-.row {
-  display: flex;
-  gap: 10px;
-}
-
-.row .field {
-  flex: 1;
+  line-height: 1.5;
+  color: var(--color-primary-strong);
+  background: var(--color-primary-soft);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
 }
 
 .field-label {
-  font-size: 12px;
-  color: #666;
-  font-weight: 500;
-}
-
-.field input,
-.field select {
-  padding: 6px 8px;
-  font-size: 13px;
-  border: 1px solid #d4d4d4;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #1a1a1a;
-}
-
-.field input:focus,
-.field select:focus {
-  outline: none;
-  border-color: #2b7fff;
-  box-shadow: 0 0 0 2px rgba(43, 127, 255, 0.15);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  font-weight: 700;
 }
 
 .selected-place {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
-  background: #f0f6ff;
-  border: 1px solid #c7d7fe;
-  border-radius: 6px;
+  padding: 7px 10px;
+  background: var(--color-primary-soft);
+  border: 1px solid rgba(99, 102, 241, 0.30);
+  border-radius: var(--radius-md);
   font-size: 12px;
-  color: #1a1a1a;
+  font-weight: 500;
+  color: var(--color-text);
 }
 
 .selected-place-name {
@@ -852,15 +878,22 @@ onBeforeUnmount(() => {
 .clear-place {
   background: transparent;
   border: 0;
-  color: #666;
+  color: var(--color-text-muted);
   cursor: pointer;
   font-size: 14px;
   line-height: 1;
-  padding: 0 2px;
+  padding: 0 4px;
+  border-radius: 50%;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-spring);
 }
 
 .clear-place:hover {
-  color: #1a1a1a;
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  transform: rotate(90deg);
 }
 
 .place-search {
@@ -873,109 +906,108 @@ onBeforeUnmount(() => {
 .place-search input {
   flex: 1;
   min-width: 0;
-  padding: 6px 8px;
-  font-size: 13px;
-  border: 1px solid #d4d4d4;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #1a1a1a;
 }
 
-.place-search input:focus {
-  outline: none;
-  border-color: #2b7fff;
-  box-shadow: 0 0 0 2px rgba(43, 127, 255, 0.15);
+.pick-btn,
+.existing-btn {
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-spring);
 }
 
 .pick-btn {
-  padding: 6px 10px;
-  font-size: 12px;
-  border-radius: 6px;
-  border: 1px solid #2b7fff;
-  background: #ffffff;
-  color: #2b7fff;
-  cursor: pointer;
-  white-space: nowrap;
+  border: 1px solid var(--color-primary);
+  background: var(--color-surface-strong);
+  color: var(--color-primary-strong);
 }
 
 .pick-btn:hover:not(:disabled) {
-  background: #f0f6ff;
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px var(--color-primary-glow);
 }
 
 .pick-btn.active {
-  background: #2b7fff;
-  color: #ffffff;
-}
-
-.pick-btn:disabled {
-  cursor: default;
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  animation: pulseGlow 1.6s ease-in-out infinite;
 }
 
 .existing-btn {
-  padding: 6px 10px;
-  font-size: 12px;
-  border-radius: 6px;
-  border: 1px solid #6b7280;
-  background: #ffffff;
-  color: #6b7280;
-  cursor: pointer;
-  white-space: nowrap;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-strong);
+  color: var(--color-text-muted);
 }
 
 .existing-btn:hover:not(:disabled) {
-  background: #f3f4f6;
+  border-color: var(--color-primary);
+  color: var(--color-primary-strong);
+  background: var(--color-primary-soft);
 }
 
 .existing-btn.active {
-  background: #6b7280;
-  color: #ffffff;
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  border-color: var(--color-primary);
 }
 
 .existing-btn:disabled {
   cursor: default;
-  opacity: 0.5;
+  opacity: 0.45;
 }
 
 .search-results {
   list-style: none;
-  margin: 4px 0 0;
-  padding: 0;
-  border: 1px solid #e2e2e2;
-  border-radius: 6px;
-  background: #ffffff;
-  max-height: 220px;
+  margin: 6px 0 0;
+  padding: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  max-height: 240px;
   overflow-y: auto;
+  box-shadow: var(--shadow-md);
+  animation: fadeIn var(--dur-base) var(--ease-out);
 }
 
 .search-results li {
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.search-results li:last-child {
-  border-bottom: 0;
-}
-
-.search-results .result {
-  display: block;
-  width: 100%;
-  text-align: left;
-  background: transparent;
-  border: 0;
-  padding: 8px 10px;
-  font-size: 12px;
-  color: #1a1a1a;
-  cursor: pointer;
-  line-height: 1.3;
-}
-
-.search-results .result:hover {
-  background: #f5f8ff;
+  border-radius: var(--radius-sm);
 }
 
 .search-results .result {
   display: flex;
   align-items: center;
   gap: 6px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--color-text);
+  cursor: pointer;
+  line-height: 1.3;
+  border-radius: var(--radius-sm);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.search-results .result:hover {
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
 }
 
 .result-name {
@@ -991,10 +1023,11 @@ onBeforeUnmount(() => {
   font-size: 9px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #888;
-  background: #f3f4f6;
-  border-radius: 999px;
+  color: var(--color-text-muted);
+  background: var(--color-surface-soft);
+  border-radius: var(--radius-pill);
   padding: 1px 6px;
+  font-weight: 700;
 }
 
 .existing-list .result {
@@ -1004,54 +1037,32 @@ onBeforeUnmount(() => {
 .search-status {
   padding: 8px 10px;
   font-size: 12px;
-  color: #666;
+  color: var(--color-text-muted);
   font-style: italic;
 }
 
 .search-status.error {
-  color: #b42318;
+  color: var(--color-danger);
   font-style: normal;
+  background: var(--color-danger-soft);
+  border-radius: var(--radius-sm);
 }
 
 .price-row {
   display: flex;
   gap: 6px;
-  align-items: center;
+  align-items: stretch;
 }
 
-.price-row input[type='number'] {
+.price-row .tp-input[type='number'] {
   flex: 1;
   min-width: 0;
-  padding: 6px 8px;
-  font-size: 13px;
-  border: 1px solid #d4d4d4;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #1a1a1a;
-}
-
-.price-row input[type='number']:focus {
-  outline: none;
-  border-color: #2b7fff;
-  box-shadow: 0 0 0 2px rgba(43, 127, 255, 0.15);
 }
 
 .currency-input {
-  width: 70px;
+  width: 80px;
   flex-shrink: 0;
-  padding: 6px 8px;
-  font-size: 13px;
-  border: 1px solid #d4d4d4;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #1a1a1a;
   text-transform: uppercase;
-}
-
-.currency-input:focus {
-  outline: none;
-  border-color: #2b7fff;
-  box-shadow: 0 0 0 2px rgba(43, 127, 255, 0.15);
 }
 
 .paid-toggle {
@@ -1059,18 +1070,30 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  color: #555;
+  font-weight: 600;
+  color: var(--color-text-muted);
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
-  padding: 6px 8px;
-  border: 1px solid #d4d4d4;
-  border-radius: 6px;
-  background: #ffffff;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-strong);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.paid-toggle:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary-strong);
+  background: var(--color-primary-soft);
 }
 
 .paid-toggle input {
   margin: 0;
+  accent-color: var(--color-primary);
 }
 
 .links-header {
@@ -1080,92 +1103,94 @@ onBeforeUnmount(() => {
 }
 
 .link-add {
-  background: #ffffff;
-  border: 1px solid #d4d4d4;
-  border-radius: 6px;
-  padding: 3px 8px;
+  background: var(--color-surface-strong);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 4px 10px;
   font-size: 11px;
-  color: #333;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--color-primary-strong);
   cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-spring);
 }
 
 .link-add:hover {
-  background: #f0f0f0;
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  transform: translateY(-1px);
 }
 
 .links-empty {
   font-size: 12px;
-  color: #888;
+  color: var(--color-text-faint);
   font-style: italic;
+  padding: 4px 0;
+}
+
+.links-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .link-row {
   display: flex;
   gap: 4px;
-  align-items: center;
-  margin-top: 4px;
+  align-items: stretch;
 }
 
 .link-label {
   flex: 0 0 90px;
   min-width: 0;
-  padding: 5px 6px;
-  font-size: 12px;
-  border: 1px solid #d4d4d4;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #1a1a1a;
 }
 
 .link-url {
   flex: 1;
   min-width: 0;
-  padding: 5px 6px;
-  font-size: 12px;
-  border: 1px solid #d4d4d4;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #1a1a1a;
-}
-
-.link-label:focus,
-.link-url:focus {
-  outline: none;
-  border-color: #2b7fff;
-  box-shadow: 0 0 0 2px rgba(43, 127, 255, 0.15);
 }
 
 .link-remove {
   background: transparent;
-  border: 0;
-  color: #888;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
   font-size: 16px;
   line-height: 1;
-  padding: 0 4px;
+  padding: 0 8px;
   cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
 }
 
 .link-remove:hover {
-  color: #b42318;
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  border-color: var(--color-danger);
 }
 
 .error {
   margin: 0;
   font-size: 12px;
-  color: #b42318;
-  background: #fef3f2;
-  border: 1px solid #fecdca;
-  padding: 6px 8px;
-  border-radius: 6px;
+  font-weight: 600;
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
 }
 
 .sheet-footer {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 18px;
-  border-top: 1px solid #ececec;
-  background: #fafafa;
+  padding: 14px 20px;
+  border-top: 1px solid var(--color-border-soft);
+  background: var(--color-surface-strong);
   flex-shrink: 0;
 }
 
@@ -1173,40 +1198,29 @@ onBeforeUnmount(() => {
   flex: 1;
 }
 
-.btn {
-  padding: 7px 14px;
-  font-size: 13px;
-  border-radius: 6px;
-  cursor: pointer;
-  border: 1px solid transparent;
+.error-fade-enter-active,
+.error-fade-leave-active {
+  transition:
+    opacity var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-spring);
 }
 
-.btn-primary {
-  background: #2b7fff;
-  color: #ffffff;
+.error-fade-enter-from,
+.error-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
-.btn-primary:hover {
-  background: #1f6fe5;
+.link-row-enter-active,
+.link-row-leave-active {
+  transition:
+    opacity var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-spring);
 }
 
-.btn-secondary {
-  background: #ffffff;
-  color: #333;
-  border-color: #d4d4d4;
-}
-
-.btn-secondary:hover {
-  background: #f0f0f0;
-}
-
-.btn-danger {
-  background: #ffffff;
-  color: #b42318;
-  border-color: #fecdca;
-}
-
-.btn-danger:hover {
-  background: #fef3f2;
+.link-row-enter-from,
+.link-row-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
 }
 </style>

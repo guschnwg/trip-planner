@@ -6,6 +6,7 @@ import DayCarousel from './components/DayCarousel.vue';
 import EventSheet from './components/EventSheet.vue';
 import TripSelectModal from './components/TripSelectModal.vue';
 import TripCalendar from './components/TripCalendar.vue';
+import LanguageSwitcher from './components/LanguageSwitcher.vue';
 import {
   appendStoredMarker,
   cancelPicking,
@@ -24,6 +25,9 @@ import {
 } from './stores/trips.js';
 import { migrateLegacyEvents, setLegacyMigrationTripId } from './stores/events.js';
 import { reverseGeocode } from './lib/geocode.js';
+import { useI18n } from './lib/useI18n.js';
+
+const { t } = useI18n();
 
 let map = null;
 let mapClickHandler = null;
@@ -41,7 +45,6 @@ const tripSelectorOpen = ref(!trip.value);
 
 const handleTripSelected = (selectedTrip) => {
   setLegacyMigrationTripId(selectedTrip.id);
-  // Re-tag any events without a tripId to the selected trip.
   tripSelectorOpen.value = false;
 };
 
@@ -85,11 +88,10 @@ const showCarousel = computed(
 
 const dateError = computed(() => {
   if (!startDate.value || !endDate.value) return null;
-  if (endDate.value < startDate.value) return 'End date must be on or after start date.';
+  if (endDate.value < startDate.value) return t('app.dateError');
   return null;
 });
 
-// Clear map markers when the active trip changes.
 watch(
   () => trip.value?.id,
   (newId, oldId) => {
@@ -134,7 +136,6 @@ const onEventSubmitted = (event) => {
   if (isEdit) {
     removeStoredMarkersFor(event);
   }
-  // Only add map markers for events belonging to the active trip.
   if (trip.value && event.tripId && event.tripId !== trip.value.id) {
     closeSheet();
     return;
@@ -180,11 +181,6 @@ const ensureArrowImage = () => {
   if (typeof map.hasImage === 'function' && map.hasImage('arrow-head')) return;
   const size = 24;
   const data = new Uint8Array(size * size * 4);
-  // Rasterize a right-pointing triangle into RGBA pixel data.
-  // Triangle vertices in image coords (y grows downward):
-  //   tip: (size*0.85, size*0.5)
-  //   top-left: (size*0.15, size*0.15)
-  //   bottom-left: (size*0.15, size*0.85)
   const v0x = size * 0.85, v0y = size * 0.5;
   const v1x = size * 0.15, v1y = size * 0.15;
   const v2x = size * 0.15, v2y = size * 0.85;
@@ -200,7 +196,6 @@ const ensureArrowImage = () => {
       const inside = (w0 >= 0 && w1 >= 0 && w2 >= 0) || (w0 <= 0 && w1 <= 0 && w2 <= 0);
       const idx = (y * size + x) * 4;
       if (inside) {
-        // White fill with dark stroke approximated by darker pixels near edges
         const minW = Math.min(Math.abs(w0), Math.abs(w1), Math.abs(w2));
         const isEdge = minW < 2.5;
         data[idx] = isEdge ? 26 : 255;
@@ -247,7 +242,6 @@ const renderMarkers = (markerList) => {
     },
   }));
 
-  // Build commute line + arrow features by pairing from/to markers sharing an event id prefix
   const byId = new Map();
   for (const m of markerList) {
     if (m.id.endsWith('-from')) {
@@ -465,7 +459,6 @@ const initializeMap = (container) => {
   };
   map.on('click', mapClickHandler);
 
-  // Persist the map's view to the active trip whenever the user pans or zooms.
   moveEndHandler = () => {
     const active = trip.value;
     if (!active) return;
@@ -480,7 +473,6 @@ const initializeMap = (container) => {
   };
   map.on('moveend', moveEndHandler);
 
-  // Resize the map when the floating window is resized.
   if (typeof ResizeObserver !== 'undefined') {
     mapResizeObserver = new ResizeObserver(() => {
       try {
@@ -524,8 +516,6 @@ watch(sheetOpen, async (isOpen) => {
   renderMarkers(visibleMarkers.value);
 });
 
-// Reinitialize the map when the view mode changes (map moves between
-// the right pane in day mode and the sidebar in all-days mode).
 watch(calendarView, async (mode) => {
   disposeMap();
   await nextTick();
@@ -581,9 +571,6 @@ const stopMarkersWatch = watch(
     renderMarkers(markers);
     const wasTransient = hasTransient(prev || []);
     const isTransient = hasTransient(markers);
-    // Fit the map to the relevant markers when transient ones appear
-    // (preview on sheet open / pick, hover on calendar). Skip stored-only
-    // updates to avoid jumping the map after a submit.
     if (isTransient && !wasTransient) {
       const targets = markers.filter(
         (m) => m.variant === 'preview' || m.variant === 'hover',
@@ -608,27 +595,32 @@ onBeforeUnmount(() => {
     <aside class="sidebar">
       <header class="trip-header">
         <div class="trip-header-info">
-          <span class="trip-label">Trip</span>
+          <span class="trip-label">{{ t('app.trip') }}</span>
           <span class="trip-name" v-if="trip">{{ trip.name }}</span>
-          <span class="trip-name muted" v-else>No trip</span>
+          <span class="trip-name muted" v-else>{{ t('app.noTrip') }}</span>
         </div>
-        <button class="trip-switch-btn" type="button" @click="openTripSelector">
-          Switch
-        </button>
+        <div class="trip-header-actions">
+          <LanguageSwitcher />
+          <button class="trip-switch-btn" type="button" @click="openTripSelector">
+            {{ t('app.switchTrip') }}
+          </button>
+        </div>
       </header>
 
       <div class="date-fields" v-if="trip">
         <label class="field">
-          <span class="field-label">Start date</span>
-          <input type="date" v-model="startDate" :max="endDate || undefined" />
+          <span class="field-label">{{ t('app.startDate') }}</span>
+          <input class="tp-input" type="date" v-model="startDate" :max="endDate || undefined" />
         </label>
         <label class="field">
-          <span class="field-label">End date</span>
-          <input type="date" v-model="endDate" :min="startDate || undefined" />
+          <span class="field-label">{{ t('app.endDate') }}</span>
+          <input class="tp-input" type="date" v-model="endDate" :min="startDate || undefined" />
         </label>
       </div>
 
-      <p v-if="dateError" class="error">{{ dateError }}</p>
+      <transition name="slide-down">
+        <p v-if="dateError" class="error">{{ dateError }}</p>
+      </transition>
 
       <div class="view-toggle" v-if="showCarousel">
         <button
@@ -637,7 +629,7 @@ onBeforeUnmount(() => {
           type="button"
           @click="calendarView = 'carousel'"
         >
-          Day
+          {{ t('app.view.day') }}
         </button>
         <button
           class="view-btn"
@@ -645,7 +637,7 @@ onBeforeUnmount(() => {
           type="button"
           @click="calendarView = 'all'"
         >
-          All days
+          {{ t('app.view.allDays') }}
         </button>
       </div>
 
@@ -691,16 +683,18 @@ onBeforeUnmount(() => {
       />
     </div>
 
-    <EventSheet
-      v-if="sheetOpen"
-      :start-date-time="sheetContext.startDateTime"
-      :end-date-time="sheetContext.endDateTime"
-      :event="sheetContext.event"
-      :trip-id="trip?.id ?? null"
-      @close="closeSheet"
-      @submitted="onEventSubmitted"
-      @deleted="onEventDeleted"
-    />
+    <Transition name="sheet">
+      <EventSheet
+        v-if="sheetOpen"
+        :start-date-time="sheetContext.startDateTime"
+        :end-date-time="sheetContext.endDateTime"
+        :event="sheetContext.event"
+        :trip-id="trip?.id ?? null"
+        @close="closeSheet"
+        @submitted="onEventSubmitted"
+        @deleted="onEventDeleted"
+      />
+    </Transition>
 
     <TripSelectModal
       :open="tripSelectorOpen"
@@ -712,16 +706,6 @@ onBeforeUnmount(() => {
 </template>
 
 <style>
-html,
-body,
-#app {
-  margin: 0;
-  padding: 0;
-  height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  color: #1a1a1a;
-}
-
 .layout {
   display: flex;
   height: 100%;
@@ -738,11 +722,15 @@ body,
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
-  border-right: 1px solid #e2e2e2;
+  background: var(--color-surface);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border-right: 1px solid var(--color-border);
   box-sizing: border-box;
   height: 100%;
   overflow: hidden;
+  box-shadow: 8px 0 32px rgba(15, 23, 42, 0.06);
+  animation: slideInLeft var(--dur-slow) var(--ease-out);
 }
 
 .sidebar-body {
@@ -756,7 +744,7 @@ body,
   flex: 1;
   position: relative;
   min-height: 0;
-  border-top: 1px solid #ececec;
+  border-top: 1px solid var(--color-border-soft);
 }
 
 .main-content {
@@ -766,24 +754,34 @@ body,
   min-height: 0;
 }
 
-.title {
-  margin: 0;
-  padding: 16px;
-  font-size: 18px;
-  font-weight: 600;
-  border-bottom: 1px solid #ececec;
-  background: #fafafa;
-}
-
 .trip-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   padding: 0 16px;
-  border-bottom: 1px solid #e2e2e2;
-  background: #fafafa;
-  height: 56px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  min-height: 64px;
+  position: relative;
+}
+
+.trip-header::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 16px;
+  right: 16px;
+  height: 2px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    var(--color-primary) 30%,
+    var(--color-accent) 70%,
+    transparent 100%);
+  border-radius: 2px;
+  opacity: 0.65;
 }
 
 .trip-header-info {
@@ -795,38 +793,61 @@ body,
 .trip-label {
   font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #888;
-  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--color-primary);
+  font-weight: 700;
 }
 
 .trip-name {
   font-size: 15px;
-  font-weight: 600;
-  color: #1a1a1a;
+  font-weight: 700;
+  color: var(--color-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  margin-top: 2px;
 }
 
 .trip-name.muted {
-  color: #888;
+  color: var(--color-text-faint);
   font-weight: 500;
 }
 
-.trip-switch-btn {
-  background: #ffffff;
-  border: 1px solid #d4d4d4;
-  border-radius: 6px;
-  padding: 5px 10px;
-  font-size: 12px;
-  color: #333;
-  cursor: pointer;
+.trip-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-shrink: 0;
 }
 
+.trip-switch-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-strong);
+  color: var(--color-text);
+  cursor: pointer;
+  transition:
+    background var(--dur-base) var(--ease-out),
+    transform var(--dur-fast) var(--ease-spring),
+    border-color var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
+  box-shadow: var(--shadow-sm);
+}
+
 .trip-switch-btn:hover {
-  background: #f0f0f0;
+  background: linear-gradient(135deg, var(--color-primary-soft) 0%, var(--color-accent-soft) 100%);
+  border-color: var(--color-primary);
+  color: var(--color-primary-strong);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.trip-switch-btn:active {
+  transform: translateY(0);
 }
 
 .date-fields {
@@ -834,98 +855,86 @@ body,
   flex-direction: row;
   gap: 10px;
   padding: 16px;
-  border-bottom: 1px solid #ececec;
+  border-bottom: 1px solid var(--color-border-soft);
+  background: var(--color-surface-soft);
 }
 
 .field {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex: 1;
 }
 
 .field-label {
-  font-size: 12px;
-  color: #666;
-  font-weight: 500;
-}
-
-.field input[type='date'] {
-  padding: 6px 8px;
-  font-size: 13px;
-  border: 1px solid #d4d4d4;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #1a1a1a;
-}
-
-.field input[type='date']:focus {
-  outline: none;
-  border-color: #2b7fff;
-  box-shadow: 0 0 0 2px rgba(43, 127, 255, 0.15);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  font-weight: 700;
 }
 
 .error {
   margin: 0;
-  padding: 8px 16px;
+  padding: 10px 16px;
   font-size: 12px;
-  color: #b42318;
-  background: #fef3f2;
-  border-bottom: 1px solid #fecdca;
-}
-
-.sidebar-calendar {
-  flex: 1;
-  display: flex;
-  min-height: 0;
-  overflow: hidden;
+  font-weight: 600;
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+  border-bottom: 1px solid rgba(239, 68, 68, 0.25);
 }
 
 .view-toggle {
-  display: flex;
-  gap: 0;
+  display: inline-flex;
+  gap: 4px;
   padding: 8px 12px;
-  border-bottom: 1px solid #ececec;
-  background: #fafafa;
+  margin: 8px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow-sm);
+  align-self: flex-start;
 }
 
 .view-btn {
-  flex: 1;
-  background: #ffffff;
-  border: 1px solid #d4d4d4;
-  padding: 6px 10px;
+  padding: 6px 14px;
   font-size: 12px;
-  color: #333;
+  font-weight: 600;
+  font-family: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
   cursor: pointer;
+  transition:
+    background var(--dur-base) var(--ease-out),
+    color var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
 }
 
-.view-btn:first-child {
-  border-radius: 6px 0 0 6px;
-  border-right: 0;
-}
-
-.view-btn:last-child {
-  border-radius: 0 6px 6px 0;
+.view-btn:hover:not(.active) {
+  color: var(--color-text);
+  background: var(--color-primary-soft);
 }
 
 .view-btn.active {
-  background: #2b7fff;
-  color: #ffffff;
-  border-color: #2b7fff;
-}
-
-.view-btn:not(.active):hover {
-  background: #f0f0f0;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+  color: var(--color-text-inverse);
+  box-shadow: 0 4px 14px var(--color-primary-glow);
 }
 
 .map-pane {
   position: relative;
   flex: 1 1 auto;
   min-width: 0;
-  transition: margin-right 0.2s ease;
+  transition: margin-right var(--dur-slow) var(--ease-out);
+  animation: fadeIn var(--dur-slow) var(--ease-out);
 }
 
 .map-pane.with-sheet {
-  margin-right: 360px;
+  margin-right: 380px;
 }
 
 .map {
@@ -939,5 +948,58 @@ body,
 .maplibregl-canvas.picking-cursor,
 .maplibregl-canvas.picking-cursor.maplibregl-interactive {
   cursor: crosshair !important;
+}
+
+.maplibregl-ctrl-group {
+  background: var(--color-surface-strong) !important;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--color-border) !important;
+  box-shadow: var(--shadow-md) !important;
+  border-radius: var(--radius-md) !important;
+  overflow: hidden;
+}
+
+.maplibregl-ctrl-group button {
+  background-color: transparent !important;
+  transition: background var(--dur-fast) var(--ease-out) !important;
+}
+
+.maplibregl-ctrl-group button:hover {
+  background: var(--color-primary-soft) !important;
+}
+
+.maplibregl-ctrl-attrib {
+  background: var(--color-surface-soft) !important;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border-radius: var(--radius-sm) !important;
+  font-size: 10px !important;
+}
+
+.slide-down-enter-active,
+.slide-down-leave-active {
+  transition:
+    opacity var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-out);
+}
+
+.slide-down-enter-from,
+.slide-down-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.sheet-enter-active,
+.sheet-leave-active {
+  transition:
+    opacity var(--dur-slow) var(--ease-out),
+    transform var(--dur-slow) var(--ease-spring);
+}
+
+.sheet-enter-from,
+.sheet-leave-to {
+  opacity: 0;
+  transform: translateX(60px);
 }
 </style>

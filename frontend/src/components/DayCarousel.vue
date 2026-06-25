@@ -7,6 +7,9 @@ import {
   updateEvent,
 } from '../stores/events.js';
 import { clearHoverMarkers, setHoverMarkers } from '../stores/mapState.js';
+import { useI18n } from '../lib/useI18n.js';
+
+const { t } = useI18n();
 
 const MIN_DURATION_MIN = 15;
 const SNAP_MINUTES = 15;
@@ -32,11 +35,6 @@ const absMinToDateTime = (absMin) => {
   return toISODateTime(d);
 };
 
-const formatClock = (absMin) => {
-  const d = new Date(absMin * 60000);
-  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-};
-
 const formatPrice = (event) => {
   if (event.price == null) return null;
   const amount = Number(event.price);
@@ -56,6 +54,8 @@ const formatPrice = (event) => {
   const text = symbol ? `${symbol}${num}` : `${num} ${currency}`.trim();
   return { text, isFree: false };
 };
+
+const eventTypeLabel = (type) => t(`eventTypes.${type}`);
 
 const props = defineProps({
   startDate: { type: String, required: true },
@@ -99,6 +99,8 @@ const currentDayISO = computed(() => {
   return `${y}-${m}-${d}`;
 });
 
+const slideKey = computed(() => currentDayISO.value || 'empty');
+
 const hours = Array.from({ length: 24 }, (_, i) => i);
 
 const dayWeekday = (date) =>
@@ -135,8 +137,6 @@ const eventBlocks = computed(() => {
     const absStart = preview ? preview.startMin : datetimeToAbsMin(event.startDateTime);
     const absEnd = preview ? preview.endMin : datetimeToAbsMin(event.endDateTime);
     if (absStart == null || absEnd == null || absEnd <= absStart) continue;
-    // Clip to the day window so multi-day events render as the visible portion
-    // of the current day.
     const visibleStart = Math.max(absStart, dayStart);
     const visibleEnd = Math.min(absEnd, dayEnd);
     if (visibleEnd <= visibleStart) continue;
@@ -260,8 +260,6 @@ const startDrag = (eventRecord, edge, pointerEvent) => {
   window.addEventListener('pointercancel', handleDragEnd, { once: true });
 };
 
-const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
-
 const handleDragMove = (pointerEvent) => {
   if (!dragState.value) return;
   const deltaY = pointerEvent.clientY - dragState.value.startClientY;
@@ -358,26 +356,30 @@ const onEventLeave = () => {
         class="nav-btn"
         :disabled="slideIndex === 0"
         @click="goPrev"
-        aria-label="Previous day"
+        :aria-label="t('calendar.previousDay')"
       >
-        &larr;
+        <span aria-hidden="true">&larr;</span>
       </button>
       <div class="day-info">
-        <div class="day-label">
-          {{ dayWeekday(currentDay) }}
-          <div class="day-count">
-            {{ slideIndex + 1 }} of {{ days.length }}
+        <Transition name="day-fade" mode="out-in">
+          <div :key="slideKey" class="day-info-inner">
+            <div class="day-label">
+              {{ currentDay ? dayWeekday(currentDay) : '' }}
+              <span class="day-count">
+                {{ t('calendar.dayCount', { index: slideIndex + 1, total: days.length }) }}
+              </span>
+            </div>
+            <div class="day-date">{{ currentDay ? dayFull(currentDay) : '' }}</div>
           </div>
-        </div>
-        <div class="day-date">{{ dayFull(currentDay) }}</div>
+        </Transition>
       </div>
       <button
         class="nav-btn"
         :disabled="slideIndex >= days.length - 1"
         @click="goNext"
-        aria-label="Next day"
+        :aria-label="t('calendar.nextDay')"
       >
-        &rarr;
+        <span aria-hidden="true">&rarr;</span>
       </button>
     </header>
 
@@ -420,19 +422,19 @@ const onEventLeave = () => {
           <div
             class="resize-handle resize-handle-top"
             @pointerdown="(e) => startDrag(entry.event, 'start', e)"
-            aria-label="Resize start time"
+            :aria-label="t('calendar.resizeStart')"
           ></div>
           <div class="event-title">
-            <span class="event-type">{{ entry.event.type }}</span>
+            <span class="event-type">{{ eventTypeLabel(entry.event.type) }}</span>
             <span v-if="entry.event.description" class="event-description">
               {{ entry.event.description }}
             </span>
           </div>
           <div v-if="entry.event.type === 'commute'" class="event-place">
-            {{ entry.event.placeFrom || '?' }} &rarr; {{ entry.event.placeTo || '?' }}
+            {{ entry.event.placeFrom || t('event.unknown') }} {{ t('event.arrow') }} {{ entry.event.placeTo || t('event.unknown') }}
           </div>
           <div v-else-if="entry.event.place" class="event-place">
-            @ {{ entry.event.place }}
+            {{ t('event.at') }} {{ entry.event.place }}
           </div>
           <div v-if="formatPrice(entry.event)" class="event-price">
             <span
@@ -445,9 +447,9 @@ const onEventLeave = () => {
             >
               {{ formatPrice(entry.event).text }}
             </span>
-            <span v-if="formatPrice(entry.event).isFree" class="event-price-flag">free</span>
-            <span v-else-if="!entry.event.isPaid" class="event-price-flag">planned</span>
-            <span v-else class="event-price-flag">paid</span>
+            <span v-if="formatPrice(entry.event).isFree" class="event-price-flag">{{ t('event.free') }}</span>
+            <span v-else-if="!entry.event.isPaid" class="event-price-flag">{{ t('event.planned') }}</span>
+            <span v-else class="event-price-flag">{{ t('event.paid') }}</span>
           </div>
           <ul v-if="entry.event.links && entry.event.links.length" class="event-links">
             <li v-for="(link, li) in entry.event.links" :key="li">
@@ -465,7 +467,7 @@ const onEventLeave = () => {
           <div
             class="resize-handle resize-handle-bottom"
             @pointerdown="(e) => startDrag(entry.event, 'end', e)"
-            aria-label="Resize end time"
+            :aria-label="t('calendar.resizeEnd')"
           ></div>
         </li>
       </ul>
@@ -479,10 +481,13 @@ const onEventLeave = () => {
   flex-direction: column;
   width: 100%;
   height: 100%;
-  background: #ffffff;
-  border-right: 1px solid #e2e2e2;
+  background: var(--color-surface);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border-right: 1px solid var(--color-border);
   box-sizing: border-box;
   overflow: hidden;
+  animation: fadeIn var(--dur-slow) var(--ease-out);
 }
 
 .carousel-header {
@@ -490,50 +495,99 @@ const onEventLeave = () => {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  border-bottom: 1px solid #ececec;
-  background: #fafafa;
+  border-bottom: 1px solid var(--color-border-soft);
+  background: var(--color-surface-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
   flex-shrink: 0;
+  position: relative;
+}
+
+.carousel-header::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 16px;
+  right: 16px;
+  height: 2px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    var(--color-primary) 30%,
+    var(--color-accent) 70%,
+    transparent 100%);
+  border-radius: 2px;
+  opacity: 0.6;
 }
 
 .day-info {
   text-align: center;
   min-width: 0;
+  flex: 1;
+}
+
+.day-info-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
 }
 
 .day-label {
-  font-weight: 600;
+  font-weight: 700;
   font-size: 14px;
-  color: #1a1a1a;
+  color: var(--color-text);
   display: flex;
   gap: 10px;
-  align-items: center;
+  align-items: baseline;
+}
+
+.day-count {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  background: var(--color-primary-soft);
+  border-radius: var(--radius-pill);
+  padding: 2px 8px;
 }
 
 .day-date {
   font-size: 12px;
-  color: #555;
-  margin-top: 2px;
-}
-
-.day-count {
-  font-size: 11px;
-  color: #888;
-  margin-top: 2px;
+  color: var(--color-text-muted);
 }
 
 .nav-btn {
-  background: #ffffff;
-  border: 1px solid #d4d4d4;
-  border-radius: 6px;
-  width: 32px;
-  height: 32px;
+  background: var(--color-surface-strong);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  width: 34px;
+  height: 34px;
   font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text);
   cursor: pointer;
-  color: #333;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-spring),
+    box-shadow var(--dur-fast) var(--ease-out);
+  box-shadow: var(--shadow-sm);
 }
 
 .nav-btn:hover:not(:disabled) {
-  background: #f0f0f0;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+  color: var(--color-text-inverse);
+  border-color: transparent;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px var(--color-primary-glow);
+}
+
+.nav-btn:active:not(:disabled) {
+  transform: scale(0.95);
 }
 
 .nav-btn:disabled {
@@ -553,32 +607,34 @@ const onEventLeave = () => {
 .hour-row {
   display: flex;
   align-items: stretch;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-border-soft);
   cursor: pointer;
   grid-column: 1;
-  background: #ffffff;
+  background: var(--color-surface-soft);
+  transition: background var(--dur-fast) var(--ease-out);
 }
 
 .hour-row:hover {
-  background: #fafafa;
+  background: var(--color-primary-soft);
 }
 
 .hour-slots {
   grid-column: 2;
   grid-row: 1 / span 24;
   position: relative;
-  border-left: 1px solid #f0f0f0;
+  border-left: 1px solid var(--color-border-soft);
 }
 
 .hour-slot {
   height: 48px;
   box-sizing: border-box;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-border-soft);
   position: relative;
+  transition: background var(--dur-fast) var(--ease-out);
 }
 
 .hour-slot:hover {
-  background: #fafafa;
+  background: var(--color-primary-soft);
 }
 
 .hour-label {
@@ -586,10 +642,11 @@ const onEventLeave = () => {
   flex-shrink: 0;
   padding: 6px 8px;
   font-size: 11px;
-  color: #888;
+  color: var(--color-text-muted);
   font-variant-numeric: tabular-nums;
-  border-right: 1px solid #f0f0f0;
-  background: #fcfcfc;
+  font-weight: 600;
+  border-right: 1px solid var(--color-border-soft);
+  background: var(--color-surface);
 }
 
 .event-overlay {
@@ -606,16 +663,31 @@ const onEventLeave = () => {
 
 .event {
   position: absolute;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 6px 8px;
   font-size: 12px;
-  border-left: 3px solid #2b7fff;
-  background: #f5f8ff;
-  color: #1a1a1a;
+  border-left: 3px solid var(--color-primary);
+  background: var(--color-activity-bg, var(--color-primary-soft));
+  color: var(--color-text);
   box-sizing: border-box;
   overflow: hidden;
   pointer-events: auto;
   z-index: 1;
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  transition:
+    transform var(--dur-base) var(--ease-spring),
+    box-shadow var(--dur-base) var(--ease-out),
+    filter var(--dur-base) var(--ease-out);
+  animation: pop var(--dur-slow) var(--ease-spring) both;
+}
+
+.event:hover {
+  transform: translateY(-2px) scale(1.01);
+  filter: brightness(1.04);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.16);
+  z-index: 2;
 }
 
 .resize-handle {
@@ -636,13 +708,7 @@ const onEventLeave = () => {
 }
 
 .resize-handle:hover {
-  background: rgba(43, 127, 255, 0.18);
-}
-
-.event-continuation {
-  font-size: 10px;
-  color: #888;
-  margin: 0 2px;
+  background: rgba(99, 102, 241, 0.22);
 }
 
 .event-title {
@@ -655,18 +721,18 @@ const onEventLeave = () => {
 .event-type {
   text-transform: uppercase;
   font-size: 10px;
-  letter-spacing: 0.04em;
-  font-weight: 600;
-  color: #2b7fff;
+  letter-spacing: 0.05em;
+  font-weight: 800;
+  color: var(--color-primary-strong);
 }
 
 .event-description {
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .event-place {
   font-size: 11px;
-  color: #555;
+  color: var(--color-text-muted);
   margin-top: 2px;
 }
 
@@ -676,7 +742,7 @@ const onEventLeave = () => {
   gap: 6px;
   margin-top: 2px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .event-price-amount.is-paid {
@@ -689,15 +755,14 @@ const onEventLeave = () => {
 
 .event-price-amount.is-free {
   color: #475569;
-  font-weight: 700;
 }
 
 .event-price-flag {
   font-size: 9px;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #888;
-  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  font-weight: 700;
 }
 
 .event-links {
@@ -711,79 +776,98 @@ const onEventLeave = () => {
 
 .event-link {
   font-size: 11px;
-  color: #1849a9;
-  text-decoration: underline;
+  color: var(--color-primary-strong);
+  text-decoration: none;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   display: block;
+  border-radius: var(--radius-sm);
+  padding: 0 4px;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
 }
 
 .event-link:hover {
-  color: #2b7fff;
+  background: var(--color-primary-soft);
+  text-decoration: underline;
 }
 
 .event-commute {
-  border-left-color: #f79009;
-  background: #fffaf2;
+  border-left-color: var(--cat-commute);
+  background: var(--cat-commute-bg);
 }
 .event-commute .event-type {
   color: #b54708;
 }
 
 .event-sleep {
-  border-left-color: #7a5af8;
-  background: #f4f3ff;
+  border-left-color: var(--cat-sleep);
+  background: var(--cat-sleep-bg);
 }
 .event-sleep .event-type {
   color: #5925dc;
 }
 
 .event-food {
-  border-left-color: #16a34a;
-  background: #f0fdf4;
+  border-left-color: var(--cat-food);
+  background: var(--cat-food-bg);
 }
 .event-food .event-type {
   color: #166534;
 }
 
 .event-activity {
-  border-left-color: #2b7fff;
-  background: #f5f8ff;
+  border-left-color: var(--cat-activity);
+  background: var(--cat-activity-bg);
 }
 .event-activity .event-type {
-  color: #1849a9;
+  color: var(--color-primary-strong);
 }
 
 .event-work {
-  border-left-color: #475569;
-  background: #f1f5f9;
+  border-left-color: var(--cat-work);
+  background: var(--cat-work-bg);
 }
 .event-work .event-type {
   color: #1e293b;
 }
 
 .event-leisure {
-  border-left-color: #db2777;
-  background: #fdf2f8;
+  border-left-color: var(--cat-leisure);
+  background: var(--cat-leisure-bg);
 }
 .event-leisure .event-type {
   color: #9d174d;
 }
 
 .event-other {
-  border-left-color: #6b7280;
-  background: #f9fafb;
+  border-left-color: var(--cat-other);
+  background: var(--cat-other-bg);
 }
 .event-other .event-type {
   color: #374151;
 }
 
 .event-accommodation {
-  border-left-color: #0891b2;
-  background: #ecfeff;
+  border-left-color: var(--cat-accommodation);
+  background: var(--cat-accommodation-bg);
 }
 .event-accommodation .event-type {
   color: #155e75;
+}
+
+.day-fade-enter-active,
+.day-fade-leave-active {
+  transition:
+    opacity var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-spring);
+}
+
+.day-fade-enter-from,
+.day-fade-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
 }
 </style>

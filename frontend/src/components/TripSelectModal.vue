@@ -1,6 +1,9 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { addTrip, removeTrip, setActiveTripId, trips, updateTrip } from '../stores/trips.js';
+import { useI18n } from '../lib/useI18n.js';
+
+const { t } = useI18n();
 
 const props = defineProps({
   open: { type: Boolean, default: true },
@@ -78,15 +81,15 @@ const selectTrip = (trip) => {
 const handleCreateOrSave = () => {
   error.value = '';
   if (!form.name.trim()) {
-    error.value = 'Name is required.';
+    error.value = t('tripModal.errors.nameRequired');
     return;
   }
   if (!form.startDate || !form.endDate) {
-    error.value = 'Start and end dates are required.';
+    error.value = t('tripModal.errors.datesRequired');
     return;
   }
   if (form.endDate < form.startDate) {
-    error.value = 'End date must be on or after start date.';
+    error.value = t('tripModal.errors.endBeforeStart');
     return;
   }
   if (editingId.value) {
@@ -107,7 +110,8 @@ const handleCreateOrSave = () => {
 };
 
 const handleDelete = (trip) => {
-  if (!confirm(`Delete trip "${trip.name}"? Its events will remain in storage but become orphaned.`)) return;
+  const msg = t('tripModal.deleteConfirm', { name: trip.name });
+  if (!confirm(msg)) return;
   removeTrip(trip.id);
   if (mode.value === 'create' && editingId.value === trip.id) {
     resetForm();
@@ -132,102 +136,120 @@ const formatRange = (trip) => {
       year: 'numeric',
     });
   };
-  return `${fmt(trip.startDate)} → ${fmt(trip.endDate)}`;
+  const sep = t('tripModal.rangeSeparator');
+  return `${fmt(trip.startDate)} ${sep} ${fmt(trip.endDate)}`;
 };
+
+const modalTitle = computed(() => {
+  if (mode.value === 'create') {
+    return editingId.value ? t('tripModal.titleEdit') : t('tripModal.titleCreate');
+  }
+  return t('tripModal.titleSelect');
+});
 </script>
 
 <template>
-  <div v-if="open" class="trip-modal-backdrop">
-    <div class="trip-modal" role="dialog" aria-modal="true" aria-labelledby="trip-modal-title">
-      <header class="trip-modal-header">
-        <h2 id="trip-modal-title">
-          {{ mode === 'create' ? (editingId ? 'Edit trip' : 'New trip') : 'Your trips' }}
-        </h2>
-        <button
-          v-if="canClose"
-          class="close-btn"
-          type="button"
-          @click="$emit('close')"
-          aria-label="Close"
-        >
-          &times;
-        </button>
-      </header>
-
-      <div class="trip-modal-body">
-        <div v-if="mode === 'select'">
-          <p v-if="!trips.length" class="empty">No trips yet. Create your first one.</p>
-          <ul v-else class="trip-list">
-            <li v-for="trip in trips" :key="trip.id" class="trip-item">
-              <button class="trip-select" type="button" @click="selectTrip(trip)">
-                <span class="trip-name">{{ trip.name }}</span>
-                <span class="trip-range">{{ formatRange(trip) }}</span>
+  <Teleport to="body">
+    <Transition name="modal-backdrop">
+      <div v-if="open" class="trip-modal-backdrop">
+        <Transition name="modal-card" appear>
+          <div class="trip-modal" role="dialog" aria-modal="true" :aria-labelledby="`trip-modal-title-${mode}`">
+            <div class="trip-modal-glow" aria-hidden="true"></div>
+            <header class="trip-modal-header">
+              <h2 :id="`trip-modal-title-${mode}`">{{ modalTitle }}</h2>
+              <button
+                v-if="canClose"
+                class="close-btn"
+                type="button"
+                @click="$emit('close')"
+                :aria-label="t('tripModal.actions.close')"
+              >
+                &times;
               </button>
-              <div class="trip-actions">
-                <button class="icon-btn" type="button" @click="startEdit(trip)" aria-label="Edit trip">
-                  Edit
-                </button>
-                <button class="icon-btn danger" type="button" @click="handleDelete(trip)" aria-label="Delete trip">
-                  Delete
-                </button>
+            </header>
+
+            <div class="trip-modal-body">
+              <div v-if="mode === 'select'" key="select">
+                <p v-if="!trips.length" class="empty">{{ t('tripModal.empty') }}</p>
+                <ul v-else class="trip-list">
+                  <li v-for="trip in trips" :key="trip.id" class="trip-item">
+                    <button class="trip-select" type="button" @click="selectTrip(trip)">
+                      <span class="trip-name">{{ trip.name }}</span>
+                      <span class="trip-range">{{ formatRange(trip) }}</span>
+                    </button>
+                    <div class="trip-actions">
+                      <button class="icon-btn" type="button" @click="startEdit(trip)" :aria-label="t('tripModal.actions.edit')">
+                        {{ t('tripModal.actions.edit') }}
+                      </button>
+                      <button class="icon-btn danger" type="button" @click="handleDelete(trip)" :aria-label="t('tripModal.actions.delete')">
+                        {{ t('tripModal.actions.delete') }}
+                      </button>
+                    </div>
+                  </li>
+                </ul>
+                <div class="trip-modal-footer">
+                  <button class="tp-btn tp-btn-primary" type="button" @click="startCreate">
+                    {{ t('tripModal.actions.newTrip') }}
+                  </button>
+                </div>
               </div>
-            </li>
-          </ul>
-          <div class="trip-modal-footer">
-            <button class="btn btn-primary" type="button" @click="startCreate">
-              New trip
-            </button>
-          </div>
-        </div>
 
-        <form v-else class="trip-form" @submit.prevent="handleCreateOrSave">
-          <label class="field">
-            <span class="field-label">Name</span>
-            <input
-              type="text"
-              v-model="form.name"
-              placeholder="Tokyo 2026, Summer road trip…"
-              maxlength="80"
-              autofocus
-            />
-          </label>
-          <div class="row">
-            <label class="field">
-              <span class="field-label">Start date</span>
-              <input type="date" v-model="form.startDate" :max="form.endDate || undefined" />
-            </label>
-            <label class="field">
-              <span class="field-label">End date</span>
-              <input type="date" v-model="form.endDate" :min="form.startDate || undefined" />
-            </label>
-          </div>
+              <form v-else class="trip-form" @submit.prevent="handleCreateOrSave" key="create">
+                <label class="field">
+                  <span class="field-label">{{ t('tripModal.fields.name') }}</span>
+                  <input
+                    class="tp-input"
+                    type="text"
+                    v-model="form.name"
+                    :placeholder="t('tripModal.namePlaceholder')"
+                    maxlength="80"
+                    autofocus
+                  />
+                </label>
+                <div class="row">
+                  <label class="field">
+                    <span class="field-label">{{ t('tripModal.fields.startDate') }}</span>
+                    <input class="tp-input" type="date" v-model="form.startDate" :max="form.endDate || undefined" />
+                  </label>
+                  <label class="field">
+                    <span class="field-label">{{ t('tripModal.fields.endDate') }}</span>
+                    <input class="tp-input" type="date" v-model="form.endDate" :min="form.startDate || undefined" />
+                  </label>
+                </div>
 
-          <p v-if="error" class="error">{{ error }}</p>
+                <Transition name="error-fade">
+                  <p v-if="error" class="error">{{ error }}</p>
+                </Transition>
 
-          <div class="trip-modal-footer">
-            <button
-              v-if="trips.length"
-              type="button"
-              class="btn btn-secondary"
-              @click="mode = 'select'"
-            >
-              Cancel
-            </button>
-            <button type="submit" class="btn btn-primary" :disabled="!isValid">
-              {{ editingId ? 'Save' : 'Create trip' }}
-            </button>
+                <div class="trip-modal-footer">
+                  <button
+                    v-if="trips.length"
+                    type="button"
+                    class="tp-btn tp-btn-secondary"
+                    @click="mode = 'select'"
+                  >
+                    {{ t('tripModal.actions.cancel') }}
+                  </button>
+                  <button type="submit" class="tp-btn tp-btn-primary" :disabled="!isValid">
+                    {{ editingId ? t('tripModal.actions.save') : t('tripModal.actions.createTrip') }}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </form>
+        </Transition>
       </div>
-    </div>
-  </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
 .trip-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.55);
+  background: rgba(15, 23, 42, 0.45);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -236,28 +258,63 @@ const formatRange = (trip) => {
 }
 
 .trip-modal {
-  background: #ffffff;
-  width: min(520px, 100%);
+  position: relative;
+  background: var(--color-surface-strong);
+  -webkit-backdrop-filter: var(--glass-blur-strong);
+  backdrop-filter: var(--glass-blur-strong);
+  width: min(540px, 100%);
   max-height: 90vh;
-  border-radius: 12px;
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.3);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.trip-modal-glow {
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg,
+    rgba(99, 102, 241, 0.55) 0%,
+    rgba(236, 72, 153, 0.45) 50%,
+    rgba(80, 220, 255, 0.40) 100%);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.7;
+  animation: tpGlowRotate 8s linear infinite;
+}
+
+@keyframes tpGlowRotate {
+  to {
+    filter: hue-rotate(360deg);
+  }
 }
 
 .trip-modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 22px;
-  border-bottom: 1px solid #ececec;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--color-border-soft);
+  background: var(--color-surface-soft);
+  position: relative;
 }
 
 .trip-modal-header h2 {
   margin: 0;
   font-size: 17px;
-  font-weight: 600;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+  -webkit-background-clip: text;
+          background-clip: text;
+  color: transparent;
 }
 
 .close-btn {
@@ -265,9 +322,20 @@ const formatRange = (trip) => {
   border: 0;
   font-size: 22px;
   line-height: 1;
-  color: #555;
+  color: var(--color-text-muted);
   cursor: pointer;
-  padding: 0 4px;
+  padding: 4px 8px;
+  border-radius: var(--radius-md);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-spring);
+}
+
+.close-btn:hover {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  transform: rotate(90deg);
 }
 
 .trip-modal-body {
@@ -282,9 +350,10 @@ const formatRange = (trip) => {
 .empty {
   margin: 0;
   font-size: 13px;
-  color: #666;
+  color: var(--color-text-muted);
   text-align: center;
-  padding: 20px 0;
+  padding: 32px 0;
+  font-style: italic;
 }
 
 .trip-list {
@@ -300,9 +369,21 @@ const formatRange = (trip) => {
   display: flex;
   align-items: stretch;
   gap: 6px;
-  border: 1px solid #e2e2e2;
-  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-strong);
   overflow: hidden;
+  transition:
+    transform var(--dur-base) var(--ease-spring),
+    box-shadow var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out);
+  animation: fadeIn var(--dur-slow) var(--ease-out) both;
+}
+
+.trip-item:hover {
+  transform: translateY(-2px);
+  border-color: var(--color-primary);
+  box-shadow: 0 8px 20px var(--color-primary-glow);
 }
 
 .trip-select {
@@ -311,62 +392,74 @@ const formatRange = (trip) => {
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
-  background: #ffffff;
+  background: transparent;
   border: 0;
-  padding: 10px 12px;
+  padding: 12px 14px;
   text-align: left;
   cursor: pointer;
-  color: #1a1a1a;
+  color: var(--color-text);
+  font-family: inherit;
+  transition: background var(--dur-fast) var(--ease-out);
 }
 
 .trip-select:hover {
-  background: #f5f8ff;
+  background: var(--color-primary-soft);
 }
 
 .trip-name {
-  font-weight: 600;
+  font-weight: 700;
   font-size: 14px;
 }
 
 .trip-range {
   font-size: 12px;
-  color: #666;
+  color: var(--color-text-muted);
 }
 
 .trip-actions {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding-right: 6px;
+  padding-right: 8px;
 }
 
 .icon-btn {
-  background: #ffffff;
-  border: 1px solid #d4d4d4;
-  border-radius: 6px;
-  padding: 4px 8px;
+  padding: 5px 10px;
   font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
   cursor: pointer;
-  color: #333;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
 }
 
 .icon-btn:hover {
-  background: #f0f0f0;
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary);
+  color: var(--color-primary-strong);
 }
 
 .icon-btn.danger {
-  color: #b42318;
-  border-color: #fecdca;
+  color: var(--color-danger);
+  border-color: rgba(239, 68, 68, 0.30);
 }
 
 .icon-btn.danger:hover {
-  background: #fef3f2;
+  background: var(--color-danger-soft);
+  border-color: var(--color-danger);
 }
 
 .trip-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
+  animation: fadeIn var(--dur-slow) var(--ease-out);
 }
 
 .row {
@@ -381,76 +474,68 @@ const formatRange = (trip) => {
 .field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
 }
 
 .field-label {
-  font-size: 12px;
-  color: #666;
-  font-weight: 500;
-}
-
-.field input {
-  padding: 6px 8px;
-  font-size: 13px;
-  border: 1px solid #d4d4d4;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #1a1a1a;
-}
-
-.field input:focus {
-  outline: none;
-  border-color: #2b7fff;
-  box-shadow: 0 0 0 2px rgba(43, 127, 255, 0.15);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  font-weight: 700;
 }
 
 .error {
   margin: 0;
   font-size: 12px;
-  color: #b42318;
-  background: #fef3f2;
-  border: 1px solid #fecdca;
-  padding: 6px 8px;
-  border-radius: 6px;
+  font-weight: 600;
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
 }
 
 .trip-modal-footer {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
-.btn {
-  padding: 8px 16px;
-  font-size: 13px;
-  border-radius: 6px;
-  cursor: pointer;
-  border: 1px solid transparent;
+.modal-backdrop-enter-active,
+.modal-backdrop-leave-active {
+  transition: opacity var(--dur-base) var(--ease-out);
 }
 
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.modal-backdrop-enter-from,
+.modal-backdrop-leave-to {
+  opacity: 0;
 }
 
-.btn-primary {
-  background: #2b7fff;
-  color: #ffffff;
+.modal-card-enter-active,
+.modal-card-leave-active {
+  transition:
+    opacity var(--dur-slow) var(--ease-out),
+    transform var(--dur-slow) var(--ease-spring);
 }
 
-.btn-primary:hover:not(:disabled) {
-  background: #1f6fe5;
+.modal-card-enter-from,
+.modal-card-leave-to {
+  opacity: 0;
+  transform: scale(0.92) translateY(20px);
 }
 
-.btn-secondary {
-  background: #ffffff;
-  color: #333;
-  border-color: #d4d4d4;
+.error-fade-enter-active,
+.error-fade-leave-active {
+  transition:
+    opacity var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-spring);
 }
 
-.btn-secondary:hover {
-  background: #f0f0f0;
+.error-fade-enter-from,
+.error-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 </style>

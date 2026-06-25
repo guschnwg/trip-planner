@@ -7,6 +7,9 @@ import {
   updateEvent,
 } from '../stores/events.js';
 import { clearHoverMarkers, setHoverMarkers } from '../stores/mapState.js';
+import { useI18n } from '../lib/useI18n.js';
+
+const { t } = useI18n();
 
 const props = defineProps({
   startDate: { type: String, required: true },
@@ -24,7 +27,7 @@ const SNAP_MINUTES = 15;
 const MIN_DURATION_MIN = 15;
 const PIXELS_PER_SNAP = (SNAP_MINUTES / 60) * HOUR_HEIGHT;
 const MINUTES_PER_DAY = 24 * 60;
-const MAX_DAYS = 60; // safety cap to keep the DOM reasonable
+const MAX_DAYS = 60;
 
 const pad2 = (n) => String(n).padStart(2, '0');
 
@@ -67,11 +70,6 @@ const absMinToDateTime = (absMin) => {
   return toISODateTime(d);
 };
 
-const formatClock = (absMin) => {
-  const d = new Date(absMin * 60000);
-  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-};
-
 const formatPrice = (event) => {
   if (event.price == null) return null;
   const amount = Number(event.price);
@@ -92,6 +90,15 @@ const formatPrice = (event) => {
   return { text, isFree: false };
 };
 
+const eventTypeLabel = (type) => t(`eventTypes.${type}`);
+
+const priceFlagLabel = (event) => {
+  const formatted = formatPrice(event);
+  if (!formatted) return '';
+  if (formatted.isFree) return t('event.free');
+  return event.isPaid ? t('event.paid') : t('event.planned');
+};
+
 const dayHeader = (date) =>
   date.toLocaleDateString(undefined, {
     weekday: 'short',
@@ -102,7 +109,6 @@ const dayHeader = (date) =>
 const dayWeekday = (date) =>
   date.toLocaleDateString(undefined, { weekday: 'short' });
 
-// Build per-day blocks with column packing.
 const buildDayBlocks = (dayDate) => {
   const dateStr = dayISO(dayDate);
   void eventsVersion.value;
@@ -172,9 +178,6 @@ const buildDayBlocks = (dayDate) => {
     const totalColumns = Math.max(1, clusterOf.get(item).maxCol + 1);
     const col = columnOf.get(item);
     const gap = 4;
-    // Overlapping events share a 90%-wide band, split wider than evenly so
-    // adjacent blocks overlap noticeably. Single events take the full 90%
-    // and leave the right 8% clickable for adding a new event.
     const bandLeftPct = 2;
     const bandWidthPct = 90;
     const evenWidthPct = bandWidthPct / totalColumns;
@@ -232,7 +235,6 @@ const dayKeyFromAbsMin = (absMin) => {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 };
 
-// Resize handles
 const previews = ref({});
 const dragState = ref(null);
 
@@ -396,10 +398,10 @@ const onEventLeave = () => clearHoverMarkers();
               <div
                 class="resize-handle resize-handle-top"
                 @pointerdown="(e) => startDrag(block.event, 'start', e)"
-                aria-label="Resize start time"
+                :aria-label="t('calendar.resizeStart')"
               ></div>
               <div class="event-title">
-                <span class="event-type">{{ block.event.type }}</span>
+                <span class="event-type">{{ eventTypeLabel(block.event.type) }}</span>
                 <span v-if="block.event.description" class="event-description">
                   {{ block.event.description }}
                 </span>
@@ -415,13 +417,13 @@ const onEventLeave = () => clearHoverMarkers();
               >
                 <span class="event-price-amount">{{ formatPrice(block.event).text }}</span>
                 <span class="event-price-flag">
-                  {{ formatPrice(block.event).isFree ? 'free' : (block.event.isPaid ? 'paid' : 'planned') }}
+                  {{ priceFlagLabel(block.event) }}
                 </span>
               </div>
               <div
                 class="resize-handle resize-handle-bottom"
                 @pointerdown="(e) => startDrag(block.event, 'end', e)"
-                aria-label="Resize end time"
+                :aria-label="t('calendar.resizeEnd')"
               ></div>
             </li>
           </ul>
@@ -429,7 +431,7 @@ const onEventLeave = () => clearHoverMarkers();
       </div>
     </div>
   </div>
-  <div v-else class="empty">Select a trip with at least one day to see the calendar.</div>
+  <div v-else class="empty">{{ t('calendar.empty') }}</div>
 </template>
 
 <style scoped>
@@ -437,7 +439,10 @@ const onEventLeave = () => clearHoverMarkers();
   display: flex;
   height: 100%;
   overflow: auto;
-  background: #ffffff;
+  background: var(--color-surface);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  animation: fadeIn var(--dur-slow) var(--ease-out);
 }
 
 .hours-rail {
@@ -446,15 +451,17 @@ const onEventLeave = () => clearHoverMarkers();
   flex-shrink: 0;
   position: sticky;
   left: 0;
-  background: #fcfcfc;
-  border-right: 1px solid #f0f0f0;
+  background: var(--color-surface-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border-right: 1px solid var(--color-border);
   z-index: 2;
 }
 
 .hours-rail-header {
   height: 56px;
-  border-bottom: 1px solid #e2e2e2;
-  background: #fafafa;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-strong);
   flex-shrink: 0;
 }
 
@@ -469,9 +476,10 @@ const onEventLeave = () => clearHoverMarkers();
   justify-content: flex-end;
   padding: 2px 6px;
   font-size: 10px;
-  color: #888;
+  font-weight: 700;
+  color: var(--color-text-muted);
   font-variant-numeric: tabular-nums;
-  border-bottom: 1px solid #f5f5f5;
+  border-bottom: 1px solid var(--color-border-soft);
   box-sizing: border-box;
 }
 
@@ -484,7 +492,7 @@ const onEventLeave = () => clearHoverMarkers();
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid #f0f0f0;
+  border-right: 1px solid var(--color-border-soft);
 }
 
 .day-header {
@@ -493,23 +501,40 @@ const onEventLeave = () => clearHoverMarkers();
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: #fafafa;
-  border-bottom: 1px solid #e2e2e2;
+  background: var(--color-surface-strong);
+  border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
   padding: 4px;
+  position: relative;
+}
+
+.day-header::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 12px;
+  right: 12px;
+  height: 2px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    var(--color-primary) 50%,
+    transparent 100%);
+  border-radius: 2px;
+  opacity: 0.5;
 }
 
 .day-weekday {
   font-size: 10px;
   text-transform: uppercase;
-  color: #888;
-  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  letter-spacing: 0.05em;
+  font-weight: 700;
 }
 
 .day-date {
   font-size: 12px;
-  font-weight: 600;
-  color: #1a1a1a;
+  font-weight: 700;
+  color: var(--color-text);
 }
 
 .day-body {
@@ -518,12 +543,13 @@ const onEventLeave = () => clearHoverMarkers();
 }
 
 .hour-cell {
-  border-bottom: 1px solid #f5f5f5;
+  border-bottom: 1px solid var(--color-border-soft);
   box-sizing: border-box;
+  transition: background var(--dur-fast) var(--ease-out);
 }
 
 .hour-cell:hover {
-  background: #f5f8ff;
+  background: var(--color-primary-soft);
 }
 
 .event-layer {
@@ -540,21 +566,31 @@ const onEventLeave = () => clearHoverMarkers();
 
 .event {
   position: absolute;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 2px 4px;
   font-size: 10px;
-  border-left: 3px solid #2b7fff;
-  background: #f5f8ff;
-  color: #1a1a1a;
+  border-left: 3px solid var(--color-primary);
+  background: var(--color-activity-bg, var(--color-primary-soft));
+  color: var(--color-text);
   box-sizing: border-box;
   overflow: hidden;
   pointer-events: auto;
   z-index: 1;
   cursor: pointer;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  transition:
+    transform var(--dur-fast) var(--ease-spring),
+    filter var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
+  animation: pop var(--dur-slow) var(--ease-spring) both;
 }
 
 .event:hover {
-  filter: brightness(0.97);
+  transform: translateY(-1px) scale(1.02);
+  filter: brightness(1.06);
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.14);
+  z-index: 2;
 }
 
 .event-title {
@@ -570,21 +606,16 @@ const onEventLeave = () => clearHoverMarkers();
 .event-type {
   text-transform: uppercase;
   font-size: 8px;
-  letter-spacing: 0.04em;
-  font-weight: 700;
-  color: #2b7fff;
+  letter-spacing: 0.05em;
+  font-weight: 800;
+  color: var(--color-primary-strong);
   flex-shrink: 0;
 }
 
 .event-description {
-  font-weight: 500;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.event-continuation {
-  font-size: 8px;
-  color: #888;
 }
 
 .event-price {
@@ -592,7 +623,7 @@ const onEventLeave = () => clearHoverMarkers();
   align-items: center;
   gap: 4px;
   font-size: 9px;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.2;
 }
 
@@ -606,15 +637,14 @@ const onEventLeave = () => clearHoverMarkers();
 
 .event-price.is-free .event-price-amount {
   color: #475569;
-  font-weight: 700;
 }
 
 .event-price-flag {
   font-size: 8px;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: #888;
-  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  font-weight: 700;
 }
 
 .resize-handle {
@@ -635,31 +665,31 @@ const onEventLeave = () => clearHoverMarkers();
 }
 
 .resize-handle:hover {
-  background: rgba(43, 127, 255, 0.18);
+  background: rgba(99, 102, 241, 0.22);
 }
 
-.event-commute { border-left-color: #f79009; background: #fffaf2; }
+.event-commute { border-left-color: var(--cat-commute); background: var(--cat-commute-bg); }
 .event-commute .event-type { color: #b54708; }
-.event-sleep { border-left-color: #7a5af8; background: #f4f3ff; }
+.event-sleep { border-left-color: var(--cat-sleep); background: var(--cat-sleep-bg); }
 .event-sleep .event-type { color: #5925dc; }
-.event-food { border-left-color: #16a34a; background: #f0fdf4; }
+.event-food { border-left-color: var(--cat-food); background: var(--cat-food-bg); }
 .event-food .event-type { color: #166534; }
-.event-activity { border-left-color: #2b7fff; background: #f5f8ff; }
-.event-activity .event-type { color: #1849a9; }
-.event-work { border-left-color: #475569; background: #f1f5f9; }
+.event-activity { border-left-color: var(--cat-activity); background: var(--cat-activity-bg); }
+.event-activity .event-type { color: var(--color-primary-strong); }
+.event-work { border-left-color: var(--cat-work); background: var(--cat-work-bg); }
 .event-work .event-type { color: #1e293b; }
-.event-leisure { border-left-color: #db2777; background: #fdf2f8; }
+.event-leisure { border-left-color: var(--cat-leisure); background: var(--cat-leisure-bg); }
 .event-leisure .event-type { color: #9d174d; }
-.event-other { border-left-color: #6b7280; background: #f9fafb; }
+.event-other { border-left-color: var(--cat-other); background: var(--cat-other-bg); }
 .event-other .event-type { color: #374151; }
-
-.event-accommodation { border-left-color: #0891b2; background: #ecfeff; }
+.event-accommodation { border-left-color: var(--cat-accommodation); background: var(--cat-accommodation-bg); }
 .event-accommodation .event-type { color: #155e75; }
 
 .empty {
   padding: 40px;
   text-align: center;
-  color: #888;
+  color: var(--color-text-muted);
   font-size: 13px;
+  font-style: italic;
 }
 </style>
