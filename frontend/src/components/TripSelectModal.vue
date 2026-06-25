@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { addTrip, removeTrip, setActiveTripId, trips, updateTrip } from '../stores/trips.js';
-import { areExamplesLoaded, loadExampleTrips } from '../stores/examples.js';
+import { loadExampleTrips } from '../stores/examples.js';
 import { useI18n } from '../lib/useI18n.js';
 
 const { t } = useI18n();
@@ -71,8 +71,6 @@ const handleLoadExamples = () => {
   loadExampleTrips();
   mode.value = 'select';
 };
-
-const examplesAlreadyLoaded = areExamplesLoaded();
 
 const startEdit = (trip) => {
   mode.value = 'create';
@@ -199,10 +197,10 @@ const modalTitle = computed(() => {
                 </ul>
                 <div class="trip-modal-footer">
                   <button
+                    v-if="!trips.length"
                     class="tp-btn tp-btn-secondary"
                     type="button"
                     @click="handleLoadExamples"
-                    :disabled="examplesAlreadyLoaded"
                   >
                     {{ t('tripModal.actions.loadExamples') }}
                   </button>
@@ -240,6 +238,14 @@ const modalTitle = computed(() => {
                 </Transition>
 
                 <div class="trip-modal-footer">
+                  <button
+                    v-if="!trips.length"
+                    type="button"
+                    class="tp-btn tp-btn-secondary"
+                    @click="handleLoadExamples"
+                  >
+                    {{ t('tripModal.actions.loadExamples') }}
+                  </button>
                   <button
                     v-if="trips.length"
                     type="button"
@@ -478,6 +484,29 @@ const modalTitle = computed(() => {
   flex-direction: column;
   gap: 14px;
   animation: fadeIn var(--dur-slow) var(--ease-out);
+}
+
+.empty-state {
+  padding: 16px 18px;
+  border-radius: var(--radius-lg);
+  background: var(--color-primary-soft);
+  border: 1px solid var(--color-border-soft);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.empty-state-text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.empty-state-btn {
+  min-width: 160px;
 }
 
 .row {

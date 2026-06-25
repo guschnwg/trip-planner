@@ -112,6 +112,7 @@ const messages = {
       titleCreate: 'New trip',
       titleEdit: 'Edit trip',
       empty: 'No trips yet. Create your first one.',
+      emptyCreate: 'Start by creating your first trip, or load examples to explore.',
       fields: {
         name: 'Name',
         startDate: 'Start date',
@@ -249,6 +250,7 @@ const messages = {
       titleCreate: 'Nova viagem',
       titleEdit: 'Editar viagem',
       empty: 'Nenhuma viagem ainda. Crie sua primeira.',
+      emptyCreate: 'Comece criando sua primeira viagem ou carregue exemplos para explorar.',
       fields: {
         name: 'Nome',
         startDate: 'Data de início',
@@ -386,6 +388,7 @@ const messages = {
       titleCreate: 'Nuevo viaje',
       titleEdit: 'Editar viaje',
       empty: 'Aún no hay viajes. Crea el primero.',
+      emptyCreate: 'Empieza creando tu primer viaje o carga ejemplos para explorar.',
       fields: {
         name: 'Nombre',
         startDate: 'Fecha de inicio',
