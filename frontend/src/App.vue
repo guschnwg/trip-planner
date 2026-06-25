@@ -7,16 +7,21 @@ import EventSheet from './components/EventSheet.vue';
 import TripSelectModal from './components/TripSelectModal.vue';
 import TripCalendar from './components/TripCalendar.vue';
 import LanguageSwitcher from './components/LanguageSwitcher.vue';
+import TripCostSummary from './components/TripCostSummary.vue';
 import {
   appendStoredMarker,
   cancelPicking,
   clearStoredMarkers,
   getMap,
+  getMapStyle,
+  getMapStyleId,
   isPicking,
+  MAP_STYLES,
   markers as visibleMarkers,
   removeStoredMarkersFor,
   resolvePicking,
   setMap,
+  setMapStyle,
   setSheetOpen,
 } from './stores/mapState.js';
 import {
@@ -36,8 +41,18 @@ let mapResizeObserver = null;
 
 const calendarView = ref('carousel'); // 'carousel' | 'all'
 const carouselMapEl = ref(null);
-const sidebarMapEl = ref(null);
 const pendingMapInit = ref(true);
+
+const mapStyleId = ref(getMapStyleId());
+
+const handleMapStyleChange = (event) => {
+  const next = event.target.value;
+  setMapStyle(next);
+  mapStyleId.value = next;
+  if (map) {
+    map.setStyle(getMapStyle());
+  }
+};
 
 const trip = activeTrip;
 
@@ -409,25 +424,7 @@ const initializeMap = (container) => {
 
   map = new maplibregl.Map({
     container,
-    style: {
-      version: 8,
-      sources: {
-        osm: {
-          type: 'raster',
-          tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-          tileSize: 256,
-          attribution: '&copy; OpenStreetMap contributors',
-        },
-      },
-      layers: [
-        {
-          id: 'osm',
-          type: 'raster',
-          source: 'osm',
-          paint: { 'raster-saturation': -1, 'raster-contrast': 0.15 },
-        },
-      ],
-    },
+    style: getMapStyle(),
     center: initialCenter,
     zoom: initialZoom,
     bearing: initialBearing,
@@ -516,20 +513,13 @@ watch(sheetOpen, async (isOpen) => {
   renderMarkers(visibleMarkers.value);
 });
 
-watch(calendarView, async (mode) => {
-  disposeMap();
+watch(calendarView, async () => {
   await nextTick();
-  const el = mode === 'carousel' ? carouselMapEl.value : sidebarMapEl.value;
-  if (el) {
-    initializeMap(el);
-  } else {
-    pendingMapInit.value = true;
-  }
+  getMap()?.resize();
 });
 
-watch([carouselMapEl, sidebarMapEl], ([carouselEl, sidebarEl]) => {
+watch(carouselMapEl, (el) => {
   if (!pendingMapInit.value) return;
-  const el = calendarView.value === 'carousel' ? carouselEl : sidebarEl;
   if (el) {
     pendingMapInit.value = false;
     initializeMap(el);
@@ -592,109 +582,122 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="layout" :class="{ 'layout--all': calendarView === 'all' }">
-    <aside class="sidebar">
-      <header class="trip-header">
-        <div class="trip-header-info">
-          <span class="trip-label">{{ t('app.trip') }}</span>
-          <span class="trip-name" v-if="trip">{{ trip.name }}</span>
-          <span class="trip-name muted" v-else>{{ t('app.noTrip') }}</span>
-        </div>
-        <div class="trip-header-actions">
-          <LanguageSwitcher />
+    <header class="topbar">
+      <div class="topbar-brand">
+        <span class="topbar-label">
+          {{ t('app.trip') }}
           <button class="trip-switch-btn" type="button" @click="openTripSelector">
             {{ t('app.switchTrip') }}
           </button>
+        </span>
+        <span class="topbar-trip-name" v-if="trip">{{ trip.name }}</span>
+        <span class="topbar-trip-name muted" v-else>{{ t('app.noTrip') }}</span>
+      </div>
+
+      <div class="topbar-section topbar-dates" v-if="trip">
+        <label class="topbar-field">
+          <span class="topbar-field-label">{{ t('app.startDate') }}</span>
+          <input class="tp-input tp-input--compact" type="date" v-model="startDate" :max="endDate || undefined" />
+        </label>
+        <label class="topbar-field">
+          <span class="topbar-field-label">{{ t('app.endDate') }}</span>
+          <input class="tp-input tp-input--compact" type="date" v-model="endDate" :min="startDate || undefined" />
+        </label>
+      </div>
+
+      <TripCostSummary v-if="trip" :trip-id="trip.id" compact />
+
+      <div class="topbar-section topbar-view" v-if="showCarousel">
+        <div class="view-toggle">
+          <button
+            class="view-btn"
+            :class="{ active: calendarView === 'carousel' }"
+            type="button"
+            @click="calendarView = 'carousel'"
+          >
+            {{ t('app.view.day') }}
+          </button>
+          <button
+            class="view-btn"
+            :class="{ active: calendarView === 'all' }"
+            type="button"
+            @click="calendarView = 'all'"
+          >
+            {{ t('app.view.allDays') }}
+          </button>
         </div>
-      </header>
-
-      <div class="date-fields" v-if="trip">
-        <label class="field">
-          <span class="field-label">{{ t('app.startDate') }}</span>
-          <input class="tp-input" type="date" v-model="startDate" :max="endDate || undefined" />
-        </label>
-        <label class="field">
-          <span class="field-label">{{ t('app.endDate') }}</span>
-          <input class="tp-input" type="date" v-model="endDate" :min="startDate || undefined" />
-        </label>
       </div>
 
-      <transition name="slide-down">
-        <p v-if="dateError" class="error">{{ dateError }}</p>
-      </transition>
-
-      <div class="view-toggle" v-if="showCarousel">
-        <button
-          class="view-btn"
-          :class="{ active: calendarView === 'carousel' }"
-          type="button"
-          @click="calendarView = 'carousel'"
-        >
-          {{ t('app.view.day') }}
-        </button>
-        <button
-          class="view-btn"
-          :class="{ active: calendarView === 'all' }"
-          type="button"
-          @click="calendarView = 'all'"
-        >
-          {{ t('app.view.allDays') }}
-        </button>
+      <div class="topbar-section topbar-actions">
+        <label class="map-style-select">
+          <span class="map-style-select-label">Map</span>
+          <select
+            class="tp-input tp-input--compact"
+            :value="mapStyleId"
+            @change="handleMapStyleChange"
+          >
+            <option v-for="s in MAP_STYLES" :key="s.id" :value="s.id">
+              {{ s.label }}
+            </option>
+          </select>
+        </label>
+        <LanguageSwitcher />
       </div>
+    </header>
+
+    <transition name="slide-down">
+      <p v-if="dateError" class="error">{{ dateError }}</p>
+    </transition>
+
+    <div class="layout-row">
+      <aside class="sidebar">
+        <div
+          class="sidebar-body"
+          v-if="showCarousel && calendarView === 'carousel'"
+        >
+          <DayCarousel
+            :start-date="startDate"
+            :end-date="endDate"
+            :trip-id="trip?.id ?? null"
+            @request-add-event="openSheet"
+            @request-edit-event="openSheetForEdit"
+          />
+        </div>
+
+        <div
+          class="sidebar-calendar"
+          v-else-if="showCarousel && calendarView === 'all'"
+        >
+          <TripCalendar
+            :start-date="startDate"
+            :end-date="endDate"
+            :trip-id="trip?.id ?? null"
+            @request-add-event="openSheet"
+            @request-edit-event="openSheetForEdit"
+          />
+        </div>
+      </aside>
 
       <div
-        class="sidebar-body"
-        v-if="showCarousel && calendarView === 'carousel'"
+        class="map-pane"
       >
-        <DayCarousel
-          :start-date="startDate"
-          :end-date="endDate"
+        <div ref="carouselMapEl" class="map"></div>
+      </div>
+
+      <Transition name="sheet">
+        <EventSheet
+          v-if="sheetOpen"
+          class="event-sheet"
+          :start-date-time="sheetContext.startDateTime"
+          :end-date-time="sheetContext.endDateTime"
+          :event="sheetContext.event"
           :trip-id="trip?.id ?? null"
-          @request-add-event="openSheet"
-          @request-edit-event="openSheetForEdit"
+          @close="closeSheet"
+          @submitted="onEventSubmitted"
+          @deleted="onEventDeleted"
         />
-      </div>
-
-      <div
-        class="sidebar-map"
-        v-else-if="showCarousel && calendarView === 'all'"
-      >
-        <div ref="sidebarMapEl" class="map"></div>
-      </div>
-    </aside>
-
-    <div
-      v-if="calendarView === 'carousel'"
-      class="map-pane"
-      :class="{ 'with-sheet': sheetOpen }"
-    >
-      <div ref="carouselMapEl" class="map"></div>
+      </Transition>
     </div>
-
-    <div
-      v-else-if="calendarView === 'all' && showCarousel"
-      class="main-content"
-    >
-      <TripCalendar
-        :start-date="startDate"
-        :end-date="endDate"
-        :trip-id="trip?.id ?? null"
-        @request-add-event="openSheet"
-        @request-edit-event="openSheetForEdit"
-      />
-    </div>
-
-    <Transition name="sheet">
-      <EventSheet
-        v-if="sheetOpen"
-        :start-date-time="sheetContext.startDateTime"
-        :end-date-time="sheetContext.endDateTime"
-        :event="sheetContext.event"
-        :trip-id="trip?.id ?? null"
-        @close="closeSheet"
-        @submitted="onEventSubmitted"
-        @deleted="onEventDeleted"
-      />
-    </Transition>
 
     <TripSelectModal
       :open="tripSelectorOpen"
@@ -708,18 +711,26 @@ onBeforeUnmount(() => {
 <style>
 .layout {
   display: flex;
+  flex-direction: column;
   height: 100%;
   width: 100%;
   position: relative;
 }
 
+.layout-row {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .layout--all .sidebar {
-  width: 380px;
+  flex: 1 1 50%;
+  min-width: 0;
 }
 
 .sidebar {
-  width: 380px;
-  flex-shrink: 0;
+  flex: 0 1 380px;
+  min-width: 320px;
   display: flex;
   flex-direction: column;
   background: var(--color-surface);
@@ -731,6 +742,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   box-shadow: 8px 0 32px rgba(15, 23, 42, 0.06);
   animation: slideInLeft var(--dur-slow) var(--ease-out);
+  transition: flex-basis var(--dur-slow) var(--ease-out);
 }
 
 .sidebar-body {
@@ -740,40 +752,34 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-.sidebar-map {
+.sidebar-calendar {
   flex: 1;
-  position: relative;
-  min-height: 0;
-  border-top: 1px solid var(--color-border-soft);
-}
-
-.main-content {
-  flex: 1 1 auto;
-  min-width: 0;
   display: flex;
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
-.trip-header {
+.topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 0 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface-strong);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
-  min-height: 64px;
   position: relative;
+  flex-shrink: 0;
 }
 
-.trip-header::after {
+.topbar::after {
   content: '';
   position: absolute;
   bottom: -1px;
-  left: 16px;
-  right: 16px;
+  left: 14px;
+  right: 14px;
   height: 2px;
   background: linear-gradient(90deg,
     transparent 0%,
@@ -784,13 +790,14 @@ onBeforeUnmount(() => {
   opacity: 0.65;
 }
 
-.trip-header-info {
+.topbar-brand {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  max-width: 220px;
 }
 
-.trip-label {
+.topbar-label {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -798,30 +805,127 @@ onBeforeUnmount(() => {
   font-weight: 700;
 }
 
-.trip-name {
-  font-size: 15px;
+.topbar-trip-name {
+  font-size: 14px;
   font-weight: 700;
   color: var(--color-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
-.trip-name.muted {
+.topbar-trip-name.muted {
   color: var(--color-text-faint);
   font-weight: 500;
 }
 
-.trip-header-actions {
+.topbar-section {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
+}
+
+.topbar-dates {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topbar-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.topbar-field-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  font-weight: 700;
+}
+
+.tp-input--compact {
+  padding: 5px 8px;
+  font-size: 12px;
+  min-width: 130px;
+}
+
+.topbar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.map-style-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text);
+  background: var(--color-surface);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition:
+    background var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out);
+}
+
+.map-style-select:hover {
+  background: var(--color-surface-strong);
+  border-color: var(--color-border-strong);
+}
+
+.map-style-select-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--color-text-inverse);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+}
+
+.map-style-select select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0 18px 0 0;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--color-text);
+  cursor: pointer;
+  outline: none;
+  min-width: 0;
+}
+
+.map-style-select::after {
+  content: '▾';
+  position: relative;
+  right: 14px;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  pointer-events: none;
 }
 
 .trip-switch-btn {
-  padding: 6px 12px;
+  padding: 2px 12px;
   font-size: 12px;
   font-weight: 600;
   font-family: inherit;
@@ -848,15 +952,6 @@ onBeforeUnmount(() => {
 
 .trip-switch-btn:active {
   transform: translateY(0);
-}
-
-.date-fields {
-  display: flex;
-  flex-direction: row;
-  gap: 10px;
-  padding: 16px;
-  border-bottom: 1px solid var(--color-border-soft);
-  background: var(--color-surface-soft);
 }
 
 .field {
@@ -887,15 +982,13 @@ onBeforeUnmount(() => {
 .view-toggle {
   display: inline-flex;
   gap: 4px;
-  padding: 8px 12px;
-  margin: 8px 12px;
+  padding: 4px;
   border-radius: var(--radius-pill);
   border: 1px solid var(--color-border);
   background: var(--color-surface-strong);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
   box-shadow: var(--shadow-sm);
-  align-self: flex-start;
 }
 
 .view-btn {
@@ -929,12 +1022,8 @@ onBeforeUnmount(() => {
   position: relative;
   flex: 1 1 auto;
   min-width: 0;
-  transition: margin-right var(--dur-slow) var(--ease-out);
+  transition: flex-basis var(--dur-slow) var(--ease-out);
   animation: fadeIn var(--dur-slow) var(--ease-out);
-}
-
-.map-pane.with-sheet {
-  margin-right: 380px;
 }
 
 .map {

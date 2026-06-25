@@ -301,6 +301,10 @@ const handleDragEnd = () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('pointermove', handleDragMove);
+  if (hoverTimer) {
+    clearTimeout(hoverTimer);
+    hoverTimer = null;
+  }
   clearHoverMarkers();
 });
 
@@ -340,8 +344,25 @@ const buildHoverMarkers = (eventRecord) => {
   return markers;
 };
 
-const onEventHover = (eventRecord) => setHoverMarkers(buildHoverMarkers(eventRecord));
-const onEventLeave = () => clearHoverMarkers();
+const HOVER_DELAY_MS = 250;
+let hoverTimer = null;
+
+const onEventHover = (eventRecord) => {
+  if (hoverTimer) clearTimeout(hoverTimer);
+  const markers = buildHoverMarkers(eventRecord);
+  hoverTimer = setTimeout(() => {
+    setHoverMarkers(markers);
+    hoverTimer = null;
+  }, HOVER_DELAY_MS);
+};
+
+const onEventLeave = () => {
+  if (hoverTimer) {
+    clearTimeout(hoverTimer);
+    hoverTimer = null;
+  }
+  clearHoverMarkers();
+};
 </script>
 
 <template>

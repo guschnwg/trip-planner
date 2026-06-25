@@ -67,6 +67,7 @@ const emit = defineEmits(['request-add-event', 'request-edit-event']);
 
 const slideIndex = ref(0);
 const eventsVersion = ref(0);
+const hoursGridEl = ref(null);
 
 const days = computed(() => {
   const start = new Date(`${props.startDate}T00:00:00`);
@@ -85,6 +86,13 @@ const days = computed(() => {
 watch(days, (newDays) => {
   if (slideIndex.value >= newDays.length) {
     slideIndex.value = Math.max(0, newDays.length - 1);
+  }
+});
+
+watch(slideIndex, () => {
+  if (hoursGridEl.value) {
+    hoursGridEl.value.scrollTop = 0;
+    hoursGridEl.value.scrollLeft = 0;
   }
 });
 
@@ -301,6 +309,10 @@ const handleDragEnd = () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('pointermove', handleDragMove);
+  if (hoverTimer) {
+    clearTimeout(hoverTimer);
+    hoverTimer = null;
+  }
   clearHoverMarkers();
 });
 
@@ -340,11 +352,23 @@ const buildHoverMarkers = (eventRecord) => {
   return markers;
 };
 
+const HOVER_DELAY_MS = 500;
+let hoverTimer = null;
+
 const onEventHover = (eventRecord) => {
-  setHoverMarkers(buildHoverMarkers(eventRecord));
+  if (hoverTimer) clearTimeout(hoverTimer);
+  const markers = buildHoverMarkers(eventRecord);
+  hoverTimer = setTimeout(() => {
+    setHoverMarkers(markers);
+    hoverTimer = null;
+  }, HOVER_DELAY_MS);
 };
 
 const onEventLeave = () => {
+  if (hoverTimer) {
+    clearTimeout(hoverTimer);
+    hoverTimer = null;
+  }
   clearHoverMarkers();
 };
 </script>
@@ -383,7 +407,7 @@ const onEventLeave = () => {
       </button>
     </header>
 
-    <div class="hours-grid">
+    <div ref="hoursGridEl" class="hours-grid">
       <div
         v-for="hour in hours"
         :key="`row-${hour}`"
@@ -472,6 +496,36 @@ const onEventLeave = () => {
         </li>
       </ul>
     </div>
+
+    <footer class="carousel-footer">
+      <button
+        class="nav-btn"
+        :disabled="slideIndex === 0"
+        @click="goPrev"
+        :aria-label="t('calendar.previousDay')"
+      >
+        <span aria-hidden="true">&larr;</span>
+      </button>
+      <div class="day-info">
+        <div class="day-info-inner">
+          <div class="day-label">
+            {{ currentDay ? dayWeekday(currentDay) : '' }}
+            <span class="day-count">
+              {{ t('calendar.dayCount', { index: slideIndex + 1, total: days.length }) }}
+            </span>
+          </div>
+          <div class="day-date">{{ currentDay ? dayFull(currentDay) : '' }}</div>
+        </div>
+      </div>
+      <button
+        class="nav-btn"
+        :disabled="slideIndex >= days.length - 1"
+        @click="goNext"
+        :aria-label="t('calendar.nextDay')"
+      >
+        <span aria-hidden="true">&rarr;</span>
+      </button>
+    </footer>
   </section>
 </template>
 
@@ -507,6 +561,35 @@ const onEventLeave = () => {
   content: '';
   position: absolute;
   bottom: -1px;
+  left: 16px;
+  right: 16px;
+  height: 2px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    var(--color-primary) 30%,
+    var(--color-accent) 70%,
+    transparent 100%);
+  border-radius: 2px;
+  opacity: 0.6;
+}
+
+.carousel-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-top: 1px solid var(--color-border-soft);
+  background: var(--color-surface-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  flex-shrink: 0;
+  position: relative;
+}
+
+.carousel-footer::before {
+  content: '';
+  position: absolute;
+  top: -1px;
   left: 16px;
   right: 16px;
   height: 2px;

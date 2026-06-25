@@ -18,8 +18,9 @@ import {
 import { getMap } from '../stores/mapState.js';
 import { searchPlaces } from '../lib/geocode.js';
 import { useI18n } from '../lib/useI18n.js';
+import { CURRENCIES, formatAmount } from '../lib/costSummary.js';
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 const props = defineProps({
   startDateTime: { type: String, default: '' },
@@ -277,6 +278,13 @@ watch(
 );
 
 const isCommute = computed(() => form.type === 'commute');
+
+const pricePreview = computed(() => {
+  if (form.price == null || form.price === '' || Number.isNaN(Number(form.price))) return '';
+  const value = Number(form.price);
+  if (!Number.isFinite(value) || value < 0) return '';
+  return formatAmount(value, form.currency || 'USD', locale.value);
+});
 
 const beginPick = async (field) => {
   error.value = '';
@@ -665,17 +673,18 @@ onBeforeUnmount(() => {
             placeholder="0"
             v-model.number="form.price"
           />
-          <input
-            class="tp-input currency-input"
-            type="text"
-            placeholder="USD"
-            maxlength="4"
-            v-model="form.currency"
-          />
+          <select class="tp-input currency-select" v-model="form.currency">
+            <option v-for="c in CURRENCIES" :key="c.code" :value="c.code">
+              {{ c.code }} · {{ c.symbol }}
+            </option>
+          </select>
           <label class="paid-toggle">
             <input type="checkbox" v-model="form.isPaid" />
             <span>{{ form.isPaid ? t('eventSheet.paid.paid') : t('eventSheet.paid.planned') }}</span>
           </label>
+        </div>
+        <div v-if="pricePreview" class="price-preview" aria-live="polite">
+          {{ pricePreview }}
         </div>
       </div>
 
@@ -746,11 +755,10 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .sheet {
-  position: fixed;
-  top: 0;
-  right: 0;
-  height: 100vh;
-  width: 380px;
+  position: relative;
+  height: 100%;
+  flex: 0 0 380px;
+  min-width: 0;
   background: var(--color-surface);
   -webkit-backdrop-filter: var(--glass-blur-strong);
   backdrop-filter: var(--glass-blur-strong);
@@ -760,6 +768,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   z-index: 500;
   overflow: hidden;
+  transition: flex-basis var(--dur-slow) var(--ease-out);
 }
 
 .sheet-glow {
@@ -1059,10 +1068,23 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
-.currency-input {
-  width: 80px;
+.currency-select {
+  width: 110px;
   flex-shrink: 0;
-  text-transform: uppercase;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.price-preview {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-primary-strong);
+  background: var(--color-primary-soft);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: var(--radius-md);
+  padding: 6px 10px;
+  font-variant-numeric: tabular-nums;
+  align-self: flex-start;
 }
 
 .paid-toggle {

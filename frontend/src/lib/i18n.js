@@ -14,6 +14,14 @@ const messages = {
         allDays: 'All days',
       },
     },
+    cost: {
+      total: 'Total',
+      paid: 'Paid',
+      pending: 'To pay',
+      free: 'Free',
+      tooltip:
+        'Prices shown here may not be accurate. Tap each item to confirm the latest amount.',
+    },
     language: {
       label: 'Language',
       en: 'English',
@@ -143,6 +151,14 @@ const messages = {
         allDays: 'Todos os dias',
       },
     },
+    cost: {
+      total: 'Total',
+      paid: 'Pago',
+      pending: 'A pagar',
+      free: 'Grátis',
+      tooltip:
+        'Os preços aqui podem não estar atualizados. Toque em cada item para confirmar o valor mais recente.',
+    },
     language: {
       label: 'Idioma',
       en: 'English',
@@ -271,6 +287,14 @@ const messages = {
         day: 'Día',
         allDays: 'Todos los días',
       },
+    },
+    cost: {
+      total: 'Total',
+      paid: 'Pagado',
+      pending: 'Por pagar',
+      free: 'Gratis',
+      tooltip:
+        'Los precios mostrados aquí pueden no estar actualizados. Toca cada elemento para confirmar el importe más reciente.',
     },
     language: {
       label: 'Idioma',

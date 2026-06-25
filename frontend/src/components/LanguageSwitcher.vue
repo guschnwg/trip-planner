@@ -44,24 +44,26 @@ const localeFlag = {
       <span class="lang-trigger-caret" aria-hidden="true">▾</span>
     </button>
     <transition name="lang-menu">
-      <ul v-if="open" class="lang-menu" role="menu">
-        <li
-          v-for="code in availableLocales"
-          :key="code"
-          role="none"
-        >
-          <button
-            type="button"
-            class="lang-option"
-            :class="{ active: code === locale }"
-            role="menuitem"
-            @click="pick(code)"
+      <div v-if="open" class="lang-menu">
+        <ul class="lang-menu-inner" role="menu">
+          <li
+            v-for="code in availableLocales"
+            :key="code"
+            role="none"
           >
-            <span class="lang-option-flag">{{ localeFlag[code] || code.toUpperCase() }}</span>
-            <!-- <span v-if="code === locale" class="lang-option-check" aria-hidden="true">✓</span> -->
-          </button>
-        </li>
-      </ul>
+            <button
+              type="button"
+              class="lang-option"
+              :class="{ active: code === locale }"
+              role="menuitem"
+              @click="pick(code)"
+            >
+              <span class="lang-option-flag">{{ localeFlag[code] || code.toUpperCase() }}</span>
+              <!-- <span v-if="code === locale" class="lang-option-check" aria-hidden="true">✓</span> -->
+            </button>
+          </li>
+        </ul>
+      </div>
     </transition>
     <transition name="lang-fade">
       <div v-if="open" class="lang-scrim" @click="close" aria-hidden="true"></div>
@@ -146,8 +148,13 @@ const localeFlag = {
 
 .lang-menu {
   position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
+  top: 50%;
+  right: calc(100% + 6px);
+  transform: translateY(-50%);
+  z-index: 101;
+}
+
+.lang-menu-inner {
   margin: 0;
   padding: 6px;
   list-style: none;
@@ -157,10 +164,9 @@ const localeFlag = {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-  z-index: 101;
-  transform-origin: top right;
   display: flex;
   gap: 10px;
+  transform-origin: center right;
 }
 
 .lang-option {
@@ -228,7 +234,7 @@ const localeFlag = {
 .lang-menu-enter-from,
 .lang-menu-leave-to {
   opacity: 0;
-  transform: scale(0.92) translateY(-6px);
+  transform: scale(0.92) translateX(-6px);
 }
 
 .lang-fade-enter-active,
