@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { addTrip, removeTrip, setActiveTripId, trips, updateTrip } from '../stores/trips.js';
+import { areExamplesLoaded, loadExampleTrips } from '../stores/examples.js';
 import { useI18n } from '../lib/useI18n.js';
 
 const { t } = useI18n();
@@ -63,6 +64,15 @@ watch(
 const startCreate = () => {
   mode.value = 'create';
 };
+
+const handleLoadExamples = () => {
+  const msg = t('tripModal.examplesConfirm');
+  if (!confirm(msg)) return;
+  loadExampleTrips();
+  mode.value = 'select';
+};
+
+const examplesAlreadyLoaded = areExamplesLoaded();
 
 const startEdit = (trip) => {
   mode.value = 'create';
@@ -188,6 +198,14 @@ const modalTitle = computed(() => {
                   </li>
                 </ul>
                 <div class="trip-modal-footer">
+                  <button
+                    class="tp-btn tp-btn-secondary"
+                    type="button"
+                    @click="handleLoadExamples"
+                    :disabled="examplesAlreadyLoaded"
+                  >
+                    {{ t('tripModal.actions.loadExamples') }}
+                  </button>
                   <button class="tp-btn tp-btn-primary" type="button" @click="startCreate">
                     {{ t('tripModal.actions.newTrip') }}
                   </button>

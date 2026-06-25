@@ -118,6 +118,7 @@ const messages = {
         close: 'Close',
         edit: 'Edit',
         delete: 'Delete',
+        loadExamples: 'Load examples',
       },
       errors: {
         nameRequired: 'Name is required.',
@@ -125,6 +126,7 @@ const messages = {
         endBeforeStart: 'End date must be on or after start date.',
       },
       deleteConfirm: 'Delete trip "{name}"? Its events will remain in storage but become orphaned.',
+      examplesConfirm: 'Add 3 example trips (Italy, Iberic Peninsula, Brazil) with sample events?',
       rangeSeparator: '→',
     },
   },
@@ -245,6 +247,7 @@ const messages = {
         close: 'Fechar',
         edit: 'Editar',
         delete: 'Excluir',
+        loadExamples: 'Carregar exemplos',
       },
       errors: {
         nameRequired: 'O nome é obrigatório.',
@@ -252,6 +255,7 @@ const messages = {
         endBeforeStart: 'A data de fim deve ser igual ou posterior à data de início.',
       },
       deleteConfirm: 'Excluir a viagem "{name}"? Seus eventos continuarão armazenados, mas ficarão órfãos.',
+      examplesConfirm: 'Adicionar 3 viagens de exemplo (Itália, Península Ibérica, Brasil) com eventos?',
       rangeSeparator: '→',
     },
   },
@@ -372,6 +376,7 @@ const messages = {
         close: 'Cerrar',
         edit: 'Editar',
         delete: 'Eliminar',
+        loadExamples: 'Cargar ejemplos',
       },
       errors: {
         nameRequired: 'El nombre es obligatorio.',
@@ -379,6 +384,7 @@ const messages = {
         endBeforeStart: 'La fecha de fin debe ser igual o posterior a la fecha de inicio.',
       },
       deleteConfirm: '¿Eliminar el viaje "{name}"? Sus eventos permanecerán guardados pero quedarán huérfanos.',
+      examplesConfirm: '¿Añadir 3 viajes de ejemplo (Italia, Península Ibérica, Brasil) con eventos?',
       rangeSeparator: '→',
     },
   },
