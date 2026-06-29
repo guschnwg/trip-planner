@@ -13,6 +13,8 @@ const messages = {
         day: 'Day',
         allDays: 'All days',
       },
+      toggleHeader: 'Show trip options',
+      hideHeader: 'Hide trip options',
     },
     cost: {
       total: 'Total',
@@ -151,6 +153,8 @@ const messages = {
         day: 'Dia',
         allDays: 'Todos os dias',
       },
+      toggleHeader: 'Mostrar opções da viagem',
+      hideHeader: 'Ocultar opções da viagem',
     },
     cost: {
       total: 'Total',
@@ -289,6 +293,8 @@ const messages = {
         day: 'Día',
         allDays: 'Todos los días',
       },
+      toggleHeader: 'Mostrar opciones del viaje',
+      hideHeader: 'Ocultar opciones del viaje',
     },
     cost: {
       total: 'Total',

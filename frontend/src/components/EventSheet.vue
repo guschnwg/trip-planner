@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import {
   EVENT_TYPES,
   addEvent,
@@ -12,6 +12,7 @@ import {
 import {
   cancelPicking,
   clearPreviewMarkers,
+  isPicking,
   setPreviewMarkers,
   startPicking,
 } from '../stores/mapState.js';
@@ -19,6 +20,7 @@ import { getMap } from '../stores/mapState.js';
 import { searchPlaces } from '../lib/geocode.js';
 import { useI18n } from '../lib/useI18n.js';
 import { CURRENCIES, formatAmount } from '../lib/costSummary.js';
+import MapPicker from './MapPicker.vue';
 
 const { t, locale } = useI18n();
 
@@ -30,6 +32,11 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['close', 'submitted', 'deleted']);
+
+const MOBILE_QUERY = '(max-width: 768px)';
+const isMobile = ref(false);
+let mobileMediaQuery = null;
+let mobileMediaHandler = null;
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -286,8 +293,21 @@ const pricePreview = computed(() => {
   return formatAmount(value, form.currency || 'USD', locale.value);
 });
 
+const pickerContext = ref({ field: '', coords: null });
+
 const beginPick = async (field) => {
   error.value = '';
+  if (isPicking(field)) {
+    cancelPicking();
+    pickerContext.value = { field: '', coords: null };
+    return;
+  }
+  const coords =
+    field === 'place' ? form.placeCoords
+    : field === 'placeFrom' ? form.placeFromCoords
+    : field === 'placeTo' ? form.placeToCoords
+    : null;
+  pickerContext.value = { field, coords };
   if (field === 'place') placePickInProgress.value = true;
   if (field === 'placeFrom') placeFromPickInProgress.value = true;
   if (field === 'placeTo') placeToPickInProgress.value = true;
@@ -306,6 +326,7 @@ const beginPick = async (field) => {
   } catch (err) {
     // ignore cancel
   } finally {
+    pickerContext.value = { field: '', coords: null };
     if (field === 'place') placePickInProgress.value = false;
     if (field === 'placeFrom') placeFromPickInProgress.value = false;
     if (field === 'placeTo') placeToPickInProgress.value = false;
@@ -368,6 +389,24 @@ const removeLink = (index) => {
   form.links.splice(index, 1);
 };
 
+onMounted(() => {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+  mobileMediaQuery = window.matchMedia(MOBILE_QUERY);
+  isMobile.value = mobileMediaQuery.matches;
+  mobileMediaHandler = (event) => {
+    const wasMobile = isMobile.value;
+    isMobile.value = event.matches;
+    if (wasMobile && !event.matches && isPicking()) {
+      cancelPicking();
+    }
+  };
+  if (typeof mobileMediaQuery.addEventListener === 'function') {
+    mobileMediaQuery.addEventListener('change', mobileMediaHandler);
+  } else if (typeof mobileMediaQuery.addListener === 'function') {
+    mobileMediaQuery.addListener(mobileMediaHandler);
+  }
+});
+
 onBeforeUnmount(() => {
   cancelPicking();
   clearPreviewMarkers();
@@ -375,11 +414,20 @@ onBeforeUnmount(() => {
     if (debounceTimers[field]) clearTimeout(debounceTimers[field]);
     if (searchControllers[field]) searchControllers[field].abort();
   }
+  if (mobileMediaQuery && mobileMediaHandler) {
+    if (typeof mobileMediaQuery.removeEventListener === 'function') {
+      mobileMediaQuery.removeEventListener('change', mobileMediaHandler);
+    } else if (typeof mobileMediaQuery.removeListener === 'function') {
+      mobileMediaQuery.removeListener(mobileMediaHandler);
+    }
+    mobileMediaQuery = null;
+    mobileMediaHandler = null;
+  }
 });
 </script>
 
 <template>
-  <aside class="sheet" role="dialog" aria-modal="false" aria-labelledby="event-sheet-title">
+  <aside class="sheet" :class="{ 'sheet--mobile': isMobile }" role="dialog" aria-modal="false" aria-labelledby="event-sheet-title">
     <div class="sheet-glow" aria-hidden="true"></div>
     <header class="sheet-header">
       <h2 id="event-sheet-title">{{ isEdit ? t('eventSheet.editTitle') : t('eventSheet.newTitle') }}</h2>
@@ -443,7 +491,7 @@ onBeforeUnmount(() => {
               type="button"
               class="pick-btn"
               :class="{ active: placeFromPickInProgress }"
-              :disabled="placeFromPickInProgress"
+              :aria-pressed="placeFromPickInProgress"
               @click="beginPick('placeFrom')"
             >
               {{ placeFromPickInProgress ? t('eventSheet.actions.clickOnMap') : t('eventSheet.actions.pickOnMap') }}
@@ -525,7 +573,7 @@ onBeforeUnmount(() => {
               type="button"
               class="pick-btn"
               :class="{ active: placeToPickInProgress }"
-              :disabled="placeToPickInProgress"
+              :aria-pressed="placeToPickInProgress"
               @click="beginPick('placeTo')"
             >
               {{ placeToPickInProgress ? t('eventSheet.actions.clickOnMap') : t('eventSheet.actions.pickOnMap') }}
@@ -604,15 +652,15 @@ onBeforeUnmount(() => {
             @blur="setTimeout(() => closeResults('place'), 150)"
             :placeholder="t('eventSheet.actions.searchPlace')"
           />
-          <button
-            type="button"
-            class="pick-btn"
-            :class="{ active: placePickInProgress }"
-            :disabled="placePickInProgress"
-            @click="beginPick('place')"
-          >
-            {{ placePickInProgress ? t('eventSheet.actions.clickOnMap') : t('eventSheet.actions.pickOnMap') }}
-          </button>
+            <button
+              type="button"
+              class="pick-btn"
+              :class="{ active: placePickInProgress }"
+              :aria-pressed="placePickInProgress"
+              @click="beginPick('place')"
+            >
+              {{ placePickInProgress ? t('eventSheet.actions.clickOnMap') : t('eventSheet.actions.pickOnMap') }}
+            </button>
           <button
             type="button"
             class="existing-btn"
@@ -751,6 +799,13 @@ onBeforeUnmount(() => {
       </footer>
     </form>
   </aside>
+
+  <MapPicker
+    v-if="isMobile"
+    :field="pickerContext.field"
+    :initial-coords="pickerContext.coords"
+    :trip-id="tripId"
+  />
 </template>
 
 <style scoped>
@@ -1211,6 +1266,8 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   padding: 14px 20px;
+  margin-inline: -20px;
+  margin-bottom: -18px;
   border-top: 1px solid var(--color-border-soft);
   background: var(--color-surface-strong);
   flex-shrink: 0;
@@ -1244,5 +1301,17 @@ onBeforeUnmount(() => {
 .link-row-leave-to {
   opacity: 0;
   transform: translateY(-6px);
+}
+
+.sheet--mobile {
+  position: fixed;
+  inset: 0;
+  flex: none;
+  width: 100%;
+  height: 100%;
+  max-height: 100dvh;
+  border-left: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 </style>

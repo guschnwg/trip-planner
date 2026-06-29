@@ -43,6 +43,33 @@ const calendarView = ref('carousel'); // 'carousel' | 'all'
 const carouselMapEl = ref(null);
 const pendingMapInit = ref(true);
 
+const MOBILE_QUERY = '(max-width: 768px)';
+const isMobile = ref(
+  typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    ? window.matchMedia(MOBILE_QUERY).matches
+    : false,
+);
+const headerExpanded = ref(false);
+let mobileMediaQuery = null;
+let mobileMediaHandler = null;
+
+if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+  mobileMediaQuery = window.matchMedia(MOBILE_QUERY);
+  mobileMediaHandler = (event) => {
+    isMobile.value = event.matches;
+    if (!event.matches) headerExpanded.value = false;
+  };
+  if (typeof mobileMediaQuery.addEventListener === 'function') {
+    mobileMediaQuery.addEventListener('change', mobileMediaHandler);
+  } else if (typeof mobileMediaQuery.addListener === 'function') {
+    mobileMediaQuery.addListener(mobileMediaHandler);
+  }
+}
+
+const toggleHeader = () => {
+  headerExpanded.value = !headerExpanded.value;
+};
+
 const mapStyleId = ref(getMapStyleId());
 
 const handleMapStyleChange = (event) => {
@@ -573,6 +600,15 @@ const stopMarkersWatch = watch(
 
 onUnmounted(() => {
   stopMarkersWatch();
+  if (mobileMediaQuery && mobileMediaHandler) {
+    if (typeof mobileMediaQuery.removeEventListener === 'function') {
+      mobileMediaQuery.removeEventListener('change', mobileMediaHandler);
+    } else if (typeof mobileMediaQuery.removeListener === 'function') {
+      mobileMediaQuery.removeListener(mobileMediaHandler);
+    }
+    mobileMediaQuery = null;
+    mobileMediaHandler = null;
+  }
 });
 
 onBeforeUnmount(() => {
@@ -581,67 +617,87 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="layout" :class="{ 'layout--all': calendarView === 'all' }">
-    <header class="topbar">
-      <div class="topbar-brand">
-        <span class="topbar-label">
-          {{ t('app.trip') }}
-          <button class="trip-switch-btn" type="button" @click="openTripSelector">
-            {{ t('app.switchTrip') }}
-          </button>
-        </span>
-        <span class="topbar-trip-name" v-if="trip">{{ trip.name }}</span>
-        <span class="topbar-trip-name muted" v-else>{{ t('app.noTrip') }}</span>
-      </div>
-
-      <div class="topbar-section topbar-dates" v-if="trip">
-        <label class="topbar-field">
-          <span class="topbar-field-label">{{ t('app.startDate') }}</span>
-          <input class="tp-input tp-input--compact" type="date" v-model="startDate" :max="endDate || undefined" />
-        </label>
-        <label class="topbar-field">
-          <span class="topbar-field-label">{{ t('app.endDate') }}</span>
-          <input class="tp-input tp-input--compact" type="date" v-model="endDate" :min="startDate || undefined" />
-        </label>
-      </div>
-
-      <TripCostSummary v-if="trip" :trip-id="trip.id" compact />
-
-      <div class="topbar-section topbar-view" v-if="showCarousel">
-        <div class="view-toggle">
-          <button
-            class="view-btn"
-            :class="{ active: calendarView === 'carousel' }"
-            type="button"
-            @click="calendarView = 'carousel'"
-          >
-            {{ t('app.view.day') }}
-          </button>
-          <button
-            class="view-btn"
-            :class="{ active: calendarView === 'all' }"
-            type="button"
-            @click="calendarView = 'all'"
-          >
-            {{ t('app.view.allDays') }}
-          </button>
+  <div class="layout" :class="{ 'layout--all': calendarView === 'all', 'layout--mobile': isMobile }">
+    <header class="topbar" :class="{ 'topbar--mobile': isMobile, 'topbar--expanded': headerExpanded }">
+      <div class="topbar-main">
+        <div class="topbar-brand">
+          <span class="topbar-label">
+            {{ t('app.trip') }}
+            <button class="trip-switch-btn" type="button" @click="openTripSelector">
+              {{ t('app.switchTrip') }}
+            </button>
+          </span>
+          <span class="topbar-trip-name" v-if="trip">{{ trip.name }}</span>
+          <span class="topbar-trip-name muted" v-else>{{ t('app.noTrip') }}</span>
         </div>
+
+        <button
+          v-if="isMobile"
+          class="topbar-toggle"
+          type="button"
+          :aria-expanded="headerExpanded"
+          :aria-label="headerExpanded ? t('app.hideHeader') : t('app.toggleHeader')"
+          @click="toggleHeader"
+        >
+          <span class="topbar-toggle-icon" :class="{ 'is-open': headerExpanded }" aria-hidden="true"></span>
+        </button>
       </div>
 
-      <div class="topbar-section topbar-actions">
-        <label class="map-style-select">
-          <span class="map-style-select-label">Map</span>
-          <select
-            class="tp-input tp-input--compact"
-            :value="mapStyleId"
-            @change="handleMapStyleChange"
-          >
-            <option v-for="s in MAP_STYLES" :key="s.id" :value="s.id">
-              {{ s.label }}
-            </option>
-          </select>
-        </label>
-        <LanguageSwitcher />
+      <div
+        v-show="!isMobile || headerExpanded"
+        class="topbar-collapsible"
+      >
+        <div class="topbar-section topbar-dates" v-if="trip">
+          <label class="topbar-field">
+            <span class="topbar-field-label">{{ t('app.startDate') }}</span>
+            <input class="tp-input tp-input--compact" type="date" v-model="startDate" :max="endDate || undefined" />
+          </label>
+          <label class="topbar-field">
+            <span class="topbar-field-label">{{ t('app.endDate') }}</span>
+            <input class="tp-input tp-input--compact" type="date" v-model="endDate" :min="startDate || undefined" />
+          </label>
+        </div>
+
+        <div class="topbar-section topbar-cost">
+          <TripCostSummary v-if="trip" :trip-id="trip.id" compact />
+        </div>
+
+        <div class="topbar-section topbar-view" v-if="showCarousel">
+          <div class="view-toggle">
+            <button
+              class="view-btn"
+              :class="{ active: calendarView === 'carousel' }"
+              type="button"
+              @click="calendarView = 'carousel'"
+            >
+              {{ t('app.view.day') }}
+            </button>
+            <button
+              class="view-btn"
+              :class="{ active: calendarView === 'all' }"
+              type="button"
+              @click="calendarView = 'all'"
+            >
+              {{ t('app.view.allDays') }}
+            </button>
+          </div>
+        </div>
+
+        <div class="topbar-section topbar-actions">
+          <label class="map-style-select">
+            <span class="map-style-select-label">Map</span>
+            <select
+              class="tp-input tp-input--compact"
+              :value="mapStyleId"
+              @change="handleMapStyleChange"
+            >
+              <option v-for="s in MAP_STYLES" :key="s.id" :value="s.id">
+                {{ s.label }}
+              </option>
+            </select>
+          </label>
+          <LanguageSwitcher />
+        </div>
       </div>
     </header>
 
@@ -679,6 +735,7 @@ onBeforeUnmount(() => {
       </aside>
 
       <div
+        v-if="!isMobile"
         class="map-pane"
       >
         <div ref="carouselMapEl" class="map"></div>
@@ -723,6 +780,10 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 
+.layout--mobile .layout-row {
+  flex-direction: column;
+}
+
 .layout--all .sidebar {
   flex: 1 1 50%;
   min-width: 0;
@@ -745,6 +806,14 @@ onBeforeUnmount(() => {
   transition: flex-basis var(--dur-slow) var(--ease-out);
 }
 
+.layout--mobile .sidebar {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  border-right: 0;
+  box-shadow: none;
+}
+
 .sidebar-body {
   flex: 1;
   display: flex;
@@ -762,9 +831,10 @@ onBeforeUnmount(() => {
 
 .topbar {
   display: flex;
-  align-items: center;
+  flex-direction: row;
   flex-wrap: wrap;
-  gap: 12px;
+  align-items: center;
+  gap: 10px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface-strong);
@@ -772,6 +842,47 @@ onBeforeUnmount(() => {
   backdrop-filter: var(--glass-blur);
   position: relative;
   flex-shrink: 0;
+}
+
+.topbar-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.topbar-collapsible {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.topbar--mobile {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.topbar--mobile .topbar-collapsible {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.topbar--mobile .topbar-section {
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+}
+
+.topbar--mobile .topbar-actions {
+  margin-left: 0;
+  justify-content: center;
 }
 
 .topbar::after {
@@ -954,6 +1065,78 @@ onBeforeUnmount(() => {
   transform: translateY(0);
 }
 
+.topbar-toggle {
+  margin-left: auto;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-family: inherit;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition:
+    background var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out),
+    transform var(--dur-fast) var(--ease-spring),
+    box-shadow var(--dur-base) var(--ease-out);
+}
+
+.topbar-toggle:hover {
+  background: var(--color-surface-strong);
+  border-color: var(--color-border-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.topbar-toggle:active {
+  transform: scale(0.96);
+}
+
+.topbar-toggle-icon {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  display: inline-block;
+}
+
+.topbar-toggle-icon::before,
+.topbar-toggle-icon::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: currentColor;
+  border-radius: 2px;
+  transition: transform var(--dur-base) var(--ease-out), top var(--dur-base) var(--ease-out);
+}
+
+.topbar-toggle-icon::before {
+  top: 4px;
+  box-shadow: 0 4px 0 currentColor;
+}
+
+.topbar-toggle-icon::after {
+  top: 12px;
+  box-shadow: none;
+}
+
+.topbar-toggle-icon.is-open::before {
+  top: 8px;
+  transform: rotate(45deg);
+  box-shadow: none;
+}
+
+.topbar-toggle-icon.is-open::after {
+  top: 8px;
+  transform: rotate(-45deg);
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -1090,5 +1273,52 @@ onBeforeUnmount(() => {
 .sheet-leave-to {
   opacity: 0;
   transform: translateX(60px);
+}
+
+@media (max-width: 768px) {
+  .sheet-enter-from,
+  .sheet-leave-to {
+    transform: translateY(40px);
+  }
+}
+
+@media (max-width: 768px) {
+  .topbar {
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .topbar-main {
+    gap: 8px;
+  }
+
+  .topbar-trip-name {
+    font-size: 16px;
+  }
+
+  .tp-input--compact {
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .topbar-field {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .topbar-dates {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .layout--mobile .sidebar {
+    border-right: 0;
+  }
+
+  .layout--mobile .error {
+    padding: 8px 12px;
+    font-size: 11px;
+  }
 }
 </style>

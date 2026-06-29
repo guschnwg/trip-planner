@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
   getEventsOverlappingDate,
   parseDateTime,
@@ -10,6 +10,11 @@ import { clearHoverMarkers, setHoverMarkers } from '../stores/mapState.js';
 import { useI18n } from '../lib/useI18n.js';
 
 const { t } = useI18n();
+
+const MOBILE_QUERY = '(max-width: 768px)';
+const isMobile = ref(false);
+let mobileMediaQuery = null;
+let mobileMediaHandler = null;
 
 const props = defineProps({
   startDate: { type: String, required: true },
@@ -299,6 +304,20 @@ const handleDragEnd = () => {
   previews.value = {};
 };
 
+onMounted(() => {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+  mobileMediaQuery = window.matchMedia(MOBILE_QUERY);
+  isMobile.value = mobileMediaQuery.matches;
+  mobileMediaHandler = (event) => {
+    isMobile.value = event.matches;
+  };
+  if (typeof mobileMediaQuery.addEventListener === 'function') {
+    mobileMediaQuery.addEventListener('change', mobileMediaHandler);
+  } else if (typeof mobileMediaQuery.addListener === 'function') {
+    mobileMediaQuery.addListener(mobileMediaHandler);
+  }
+});
+
 onBeforeUnmount(() => {
   window.removeEventListener('pointermove', handleDragMove);
   if (hoverTimer) {
@@ -306,6 +325,15 @@ onBeforeUnmount(() => {
     hoverTimer = null;
   }
   clearHoverMarkers();
+  if (mobileMediaQuery && mobileMediaHandler) {
+    if (typeof mobileMediaQuery.removeEventListener === 'function') {
+      mobileMediaQuery.removeEventListener('change', mobileMediaHandler);
+    } else if (typeof mobileMediaQuery.removeListener === 'function') {
+      mobileMediaQuery.removeListener(mobileMediaHandler);
+    }
+    mobileMediaQuery = null;
+    mobileMediaHandler = null;
+  }
 });
 
 const buildHoverMarkers = (eventRecord) => {
@@ -417,6 +445,7 @@ const onEventLeave = () => {
               @mouseleave="onEventLeave"
             >
               <div
+                v-if="!isMobile"
                 class="resize-handle resize-handle-top"
                 @pointerdown="(e) => startDrag(block.event, 'start', e)"
                 :aria-label="t('calendar.resizeStart')"
@@ -442,6 +471,7 @@ const onEventLeave = () => {
                 </span>
               </div>
               <div
+                v-if="!isMobile"
                 class="resize-handle resize-handle-bottom"
                 @pointerdown="(e) => startDrag(block.event, 'end', e)"
                 :aria-label="t('calendar.resizeEnd')"
