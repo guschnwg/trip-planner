@@ -4,8 +4,8 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import {
   cancelPicking,
-  getMapStyle,
   isPicking,
+  loadMapStyle,
   markers as visibleMarkers,
   resolvePicking,
 } from '../stores/mapState.js';
@@ -249,7 +249,7 @@ const watchId = watch(open, async (isOpen) => {
   }
   const mapInstance = new maplibregl.Map({
     container: mapEl.value,
-    style: getMapStyle(),
+    style: await loadMapStyle(),
     center: initialCenter.value,
     zoom: initialZoom.value,
   });

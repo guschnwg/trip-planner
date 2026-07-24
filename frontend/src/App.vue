@@ -6,16 +6,15 @@ import DayCarousel from './components/DayCarousel.vue';
 import EventSheet from './components/EventSheet.vue';
 import TripSelectModal from './components/TripSelectModal.vue';
 import TripCalendar from './components/TripCalendar.vue';
-import LanguageSwitcher from './components/LanguageSwitcher.vue';
-import TripCostSummary from './components/TripCostSummary.vue';
+import LeftSidebar from './components/LeftSidebar.vue';
 import {
   appendStoredMarker,
   cancelPicking,
   clearStoredMarkers,
   getMap,
-  getMapStyle,
   getMapStyleId,
   isPicking,
+  loadMapStyle,
   MAP_STYLES,
   markers as visibleMarkers,
   removeStoredMarkersFor,
@@ -39,7 +38,34 @@ let mapClickHandler = null;
 let moveEndHandler = null;
 let mapResizeObserver = null;
 
-const calendarView = ref('carousel'); // 'carousel' | 'all'
+const LEFT_VIEW_KEY = 'tracker.leftView';
+const VALID_VIEWS = ['day', 'allDays', 'places', 'finances', 'settings'];
+const loadLeftView = () => {
+  if (typeof localStorage === 'undefined') return 'day';
+  try {
+    const stored = localStorage.getItem(LEFT_VIEW_KEY);
+    if (stored && VALID_VIEWS.includes(stored)) return stored;
+  } catch {
+    // ignore
+  }
+  return 'day';
+};
+
+const leftView = ref(loadLeftView());
+
+const setLeftView = (next) => {
+  if (!VALID_VIEWS.includes(next)) return;
+  if (leftView.value === next) return;
+  leftView.value = next;
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.setItem(LEFT_VIEW_KEY, next);
+    } catch {
+      // ignore
+    }
+  }
+};
+
 const carouselMapEl = ref(null);
 const pendingMapInit = ref(true);
 
@@ -49,7 +75,6 @@ const isMobile = ref(
     ? window.matchMedia(MOBILE_QUERY).matches
     : false,
 );
-const headerExpanded = ref(false);
 let mobileMediaQuery = null;
 let mobileMediaHandler = null;
 
@@ -57,7 +82,6 @@ if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
   mobileMediaQuery = window.matchMedia(MOBILE_QUERY);
   mobileMediaHandler = (event) => {
     isMobile.value = event.matches;
-    if (!event.matches) headerExpanded.value = false;
   };
   if (typeof mobileMediaQuery.addEventListener === 'function') {
     mobileMediaQuery.addEventListener('change', mobileMediaHandler);
@@ -66,18 +90,15 @@ if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
   }
 }
 
-const toggleHeader = () => {
-  headerExpanded.value = !headerExpanded.value;
-};
-
 const mapStyleId = ref(getMapStyleId());
 
-const handleMapStyleChange = (event) => {
+const handleMapStyleChange = async (event) => {
   const next = event.target.value;
   setMapStyle(next);
   mapStyleId.value = next;
   if (map) {
-    map.setStyle(getMapStyle());
+    const style = await loadMapStyle();
+    map.setStyle(style);
   }
 };
 
@@ -127,6 +148,8 @@ const showCarousel = computed(
     !!endDate.value &&
     endDate.value >= startDate.value,
 );
+
+const isCalendarView = computed(() => leftView.value === 'day' || leftView.value === 'allDays');
 
 const dateError = computed(() => {
   if (!startDate.value || !endDate.value) return null;
@@ -432,7 +455,7 @@ const onPickComplete = (result) => {
   resolvePicking(result);
 };
 
-const initializeMap = (container) => {
+const initializeMap = async (container) => {
   if (map) {
     if (mapClickHandler) map.off('click', mapClickHandler);
     if (moveEndHandler) map.off('moveend', moveEndHandler);
@@ -449,9 +472,11 @@ const initializeMap = (container) => {
   const initialZoom = savedView ? savedView.zoom : 2;
   const initialBearing = savedView?.bearing ?? 0;
 
+  const initialStyle = await loadMapStyle();
+
   map = new maplibregl.Map({
     container,
-    style: getMapStyle(),
+    style: initialStyle,
     center: initialCenter,
     zoom: initialZoom,
     bearing: initialBearing,
@@ -498,12 +523,17 @@ const initializeMap = (container) => {
   map.on('moveend', moveEndHandler);
 
   if (typeof ResizeObserver !== 'undefined') {
+    let observerTimer = null;
     mapResizeObserver = new ResizeObserver(() => {
-      try {
-        map?.resize();
-      } catch {
-        // ignore
-      }
+      if (observerTimer) return;
+      observerTimer = setTimeout(() => {
+        observerTimer = null;
+        try {
+          map?.resize();
+        } catch {
+          // ignore
+        }
+      }, 120);
     });
     mapResizeObserver.observe(container);
   }
@@ -531,7 +561,7 @@ const disposeMap = () => {
 
 watch(sheetOpen, async (isOpen) => {
   await nextTick();
-  getMap()?.resize();
+  scheduleMapResize();
   if (isOpen) {
     getMap()?.getCanvas()?.classList.add('picking-cursor');
   } else {
@@ -540,9 +570,8 @@ watch(sheetOpen, async (isOpen) => {
   renderMarkers(visibleMarkers.value);
 });
 
-watch(calendarView, async () => {
-  await nextTick();
-  getMap()?.resize();
+watch(leftView, () => {
+  scheduleMapResize();
 });
 
 watch(carouselMapEl, (el) => {
@@ -552,6 +581,30 @@ watch(carouselMapEl, (el) => {
     initializeMap(el);
   }
 });
+
+const handleFlyToPlace = (coords) => {
+  if (!map || !coords) return;
+  const targetZoom = Math.max(map.getZoom(), 13);
+  map.flyTo({ center: [coords.lng, coords.lat], zoom: targetZoom, duration: 500 });
+};
+
+let resizeTimer = null;
+const scheduleMapResize = () => {
+  if (resizeTimer) clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    resizeTimer = null;
+    getMap()?.resize();
+  }, 480);
+};
+
+const handleSidebarMapStyleChange = async (styleId) => {
+  setMapStyle(styleId);
+  mapStyleId.value = styleId;
+  if (map) {
+    const style = await loadMapStyle();
+    map.setStyle(style);
+  }
+};
 
 const fitToMarkers = (markerList) => {
   if (!map || !markerList.length) return;
@@ -617,86 +670,65 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="layout" :class="{ 'layout--all': calendarView === 'all', 'layout--mobile': isMobile }">
-    <header class="topbar" :class="{ 'topbar--mobile': isMobile, 'topbar--expanded': headerExpanded }">
+  <div class="layout" :class="{ 'layout--all': leftView === 'allDays', 'layout--mobile': isMobile }">
+    <header class="topbar" :class="{ 'topbar--mobile': isMobile }">
       <div class="topbar-main">
         <div class="topbar-brand">
-          <span class="topbar-label">
-            {{ t('app.trip') }}
-            <button class="trip-switch-btn" type="button" @click="openTripSelector">
-              {{ t('app.switchTrip') }}
+          <div class="topbar-actions-row">
+            <span class="topbar-label">{{ t('app.trip') }}</span>
+            <span class="topbar-sep" aria-hidden="true">|</span>
+            <button
+              class="trip-switch-btn trip-icon-btn"
+              type="button"
+              @click="openTripSelector"
+              :title="t('app.switchTrip')"
+              :aria-label="t('app.switchTrip')"
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+                <path
+                  d="M4 7h11M11 4l4 3-4 3"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+                <path
+                  d="M20 17H9M13 14l-4 3 4 3"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
             </button>
-          </span>
+          </div>
           <span class="topbar-trip-name" v-if="trip">{{ trip.name }}</span>
           <span class="topbar-trip-name muted" v-else>{{ t('app.noTrip') }}</span>
         </div>
-
-        <button
-          v-if="isMobile"
-          class="topbar-toggle"
-          type="button"
-          :aria-expanded="headerExpanded"
-          :aria-label="headerExpanded ? t('app.hideHeader') : t('app.toggleHeader')"
-          @click="toggleHeader"
-        >
-          <span class="topbar-toggle-icon" :class="{ 'is-open': headerExpanded }" aria-hidden="true"></span>
-        </button>
       </div>
 
-      <div
-        v-show="!isMobile || headerExpanded"
-        class="topbar-collapsible"
-      >
-        <div class="topbar-section topbar-dates" v-if="trip">
-          <label class="topbar-field">
-            <span class="topbar-field-label">{{ t('app.startDate') }}</span>
-            <input class="tp-input tp-input--compact" type="date" v-model="startDate" :max="endDate || undefined" />
-          </label>
-          <label class="topbar-field">
-            <span class="topbar-field-label">{{ t('app.endDate') }}</span>
-            <input class="tp-input tp-input--compact" type="date" v-model="endDate" :min="startDate || undefined" />
-          </label>
-        </div>
-
-        <div class="topbar-section topbar-cost">
-          <TripCostSummary v-if="trip" :trip-id="trip.id" compact />
-        </div>
-
-        <div class="topbar-section topbar-view" v-if="showCarousel">
-          <div class="view-toggle">
+      <div class="topbar-collapsible">
+        <div class="topbar-section topbar-view">
+          <div class="view-toggle view-toggle--wide">
             <button
+              v-for="view in [
+                { value: 'day', label: t('app.view.day') },
+                { value: 'allDays', label: t('app.view.allDays') },
+                { value: 'places', label: t('app.tabs.places') },
+                { value: 'finances', label: t('app.tabs.finances') },
+                { value: 'settings', label: t('app.tabs.settings') },
+              ]"
+              :key="view.value"
               class="view-btn"
-              :class="{ active: calendarView === 'carousel' }"
+              :class="{ active: leftView === view.value }"
               type="button"
-              @click="calendarView = 'carousel'"
+              @click="setLeftView(view.value)"
             >
-              {{ t('app.view.day') }}
-            </button>
-            <button
-              class="view-btn"
-              :class="{ active: calendarView === 'all' }"
-              type="button"
-              @click="calendarView = 'all'"
-            >
-              {{ t('app.view.allDays') }}
+              {{ view.label }}
             </button>
           </div>
-        </div>
-
-        <div class="topbar-section topbar-actions">
-          <label class="map-style-select">
-            <span class="map-style-select-label">Map</span>
-            <select
-              class="tp-input tp-input--compact"
-              :value="mapStyleId"
-              @change="handleMapStyleChange"
-            >
-              <option v-for="s in MAP_STYLES" :key="s.id" :value="s.id">
-                {{ s.label }}
-              </option>
-            </select>
-          </label>
-          <LanguageSwitcher />
         </div>
       </div>
     </header>
@@ -709,7 +741,7 @@ onBeforeUnmount(() => {
       <aside class="sidebar">
         <div
           class="sidebar-body"
-          v-if="showCarousel && calendarView === 'carousel'"
+          v-if="leftView === 'day' && showCarousel"
         >
           <DayCarousel
             :start-date="startDate"
@@ -722,7 +754,7 @@ onBeforeUnmount(() => {
 
         <div
           class="sidebar-calendar"
-          v-else-if="showCarousel && calendarView === 'all'"
+          v-else-if="leftView === 'allDays' && showCarousel"
         >
           <TripCalendar
             :start-date="startDate"
@@ -732,6 +764,21 @@ onBeforeUnmount(() => {
             @request-edit-event="openSheetForEdit"
           />
         </div>
+
+        <LeftSidebar
+          v-else-if="leftView === 'places' || leftView === 'finances' || leftView === 'settings'"
+          :view="leftView"
+          :trip-id="trip?.id ?? null"
+          :map-style-id="mapStyleId"
+          :map-styles="MAP_STYLES"
+          :start-date="startDate"
+          :end-date="endDate"
+          @update:map-style-id="handleSidebarMapStyleChange"
+          @update:start-date="(v) => (startDate = v)"
+          @update:end-date="(v) => (endDate = v)"
+          @fly-to-place="handleFlyToPlace"
+          @request-edit-event="openSheetForEdit"
+        />
       </aside>
 
       <div
@@ -802,8 +849,6 @@ onBeforeUnmount(() => {
   height: 100%;
   overflow: hidden;
   box-shadow: 8px 0 32px rgba(15, 23, 42, 0.06);
-  animation: slideInLeft var(--dur-slow) var(--ease-out);
-  transition: flex-basis var(--dur-slow) var(--ease-out);
 }
 
 .layout--mobile .sidebar {
@@ -880,11 +925,6 @@ onBeforeUnmount(() => {
   align-items: center;
 }
 
-.topbar--mobile .topbar-actions {
-  margin-left: 0;
-  justify-content: center;
-}
-
 .topbar::after {
   content: '';
   position: absolute;
@@ -937,120 +977,54 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 
-.topbar-dates {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.topbar-field {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.topbar-field-label {
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--color-text-muted);
-  font-weight: 700;
-}
-
 .tp-input--compact {
   padding: 5px 8px;
   font-size: 12px;
   min-width: 130px;
 }
 
-.topbar-actions {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.map-style-select {
+.topbar-actions-row {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 10px 5px 5px;
+  flex-wrap: wrap;
+}
+
+.topbar-actions-row .topbar-label {
+  margin-right: 2px;
+}
+
+.topbar-actions-row .topbar-sep {
+  color: var(--color-text-faint);
   font-size: 12px;
   font-weight: 600;
-  color: var(--color-text);
-  background: var(--color-surface);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
-  box-shadow: var(--shadow-sm);
-  cursor: pointer;
-  transition:
-    background var(--dur-base) var(--ease-out),
-    border-color var(--dur-base) var(--ease-out);
-}
-
-.map-style-select:hover {
-  background: var(--color-surface-strong);
-  border-color: var(--color-border-strong);
-}
-
-.map-style-select-label {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  color: var(--color-text-inverse);
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
-}
-
-.map-style-select select {
-  appearance: none;
-  -webkit-appearance: none;
-  background: transparent;
-  border: 0;
-  padding: 0 18px 0 0;
-  margin: 0;
-  font-size: 12px;
-  font-weight: 600;
-  font-family: inherit;
-  color: var(--color-text);
-  cursor: pointer;
-  outline: none;
-  min-width: 0;
-}
-
-.map-style-select::after {
-  content: '▾';
-  position: relative;
-  right: 14px;
-  font-size: 10px;
-  color: var(--color-text-muted);
-  pointer-events: none;
+  user-select: none;
 }
 
 .trip-switch-btn {
-  padding: 2px 12px;
-  font-size: 12px;
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
   font-family: inherit;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-pill);
   border: 1px solid var(--color-border);
   background: var(--color-surface-strong);
-  color: var(--color-text);
+  color: var(--color-text-muted);
   cursor: pointer;
   transition:
     background var(--dur-base) var(--ease-out),
-    transform var(--dur-fast) var(--ease-spring),
     border-color var(--dur-base) var(--ease-out),
-    box-shadow var(--dur-base) var(--ease-out);
+    transform var(--dur-fast) var(--ease-spring),
+    box-shadow var(--dur-base) var(--ease-out),
+    color var(--dur-base) var(--ease-out);
   box-shadow: var(--shadow-sm);
+}
+
+.trip-switch-btn svg {
+  display: block;
 }
 
 .trip-switch-btn:hover {
@@ -1063,78 +1037,6 @@ onBeforeUnmount(() => {
 
 .trip-switch-btn:active {
   transform: translateY(0);
-}
-
-.topbar-toggle {
-  margin-left: auto;
-  width: 40px;
-  height: 40px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  font-family: inherit;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text);
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  transition:
-    background var(--dur-base) var(--ease-out),
-    border-color var(--dur-base) var(--ease-out),
-    transform var(--dur-fast) var(--ease-spring),
-    box-shadow var(--dur-base) var(--ease-out);
-}
-
-.topbar-toggle:hover {
-  background: var(--color-surface-strong);
-  border-color: var(--color-border-strong);
-  box-shadow: var(--shadow-md);
-}
-
-.topbar-toggle:active {
-  transform: scale(0.96);
-}
-
-.topbar-toggle-icon {
-  position: relative;
-  width: 18px;
-  height: 18px;
-  display: inline-block;
-}
-
-.topbar-toggle-icon::before,
-.topbar-toggle-icon::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: currentColor;
-  border-radius: 2px;
-  transition: transform var(--dur-base) var(--ease-out), top var(--dur-base) var(--ease-out);
-}
-
-.topbar-toggle-icon::before {
-  top: 4px;
-  box-shadow: 0 4px 0 currentColor;
-}
-
-.topbar-toggle-icon::after {
-  top: 12px;
-  box-shadow: none;
-}
-
-.topbar-toggle-icon.is-open::before {
-  top: 8px;
-  transform: rotate(45deg);
-  box-shadow: none;
-}
-
-.topbar-toggle-icon.is-open::after {
-  top: 8px;
-  transform: rotate(-45deg);
 }
 
 .field {
@@ -1205,8 +1107,6 @@ onBeforeUnmount(() => {
   position: relative;
   flex: 1 1 auto;
   min-width: 0;
-  transition: flex-basis var(--dur-slow) var(--ease-out);
-  animation: fadeIn var(--dur-slow) var(--ease-out);
 }
 
 .map {
@@ -1300,16 +1200,6 @@ onBeforeUnmount(() => {
     min-width: 0;
     width: 100%;
     box-sizing: border-box;
-  }
-
-  .topbar-field {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .topbar-dates {
-    flex-wrap: wrap;
-    width: 100%;
   }
 
   .layout--mobile .sidebar {

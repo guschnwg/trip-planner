@@ -13,8 +13,11 @@ const messages = {
         day: 'Day',
         allDays: 'All days',
       },
-      toggleHeader: 'Show trip options',
-      hideHeader: 'Hide trip options',
+      tabs: {
+        places: 'Places',
+        finances: 'Finances',
+        settings: 'Settings',
+      },
     },
     cost: {
       total: 'Total',
@@ -23,6 +26,19 @@ const messages = {
       free: 'Free',
       tooltip:
         'Prices shown here may not be accurate. Tap each item to confirm the latest amount.',
+    },
+    rightSidebar: {
+      places: {
+        empty: 'No places yet. Add events with a place to see them here.',
+      },
+      finance: {
+        empty: 'No prices recorded yet.',
+      },
+      settings: {
+        dates: 'Trip dates',
+        mapTheme: 'Map theme',
+        language: 'Language',
+      },
     },
     language: {
       label: 'Language',
@@ -153,8 +169,16 @@ const messages = {
         day: 'Dia',
         allDays: 'Todos os dias',
       },
-      toggleHeader: 'Mostrar opções da viagem',
-      hideHeader: 'Ocultar opções da viagem',
+      tabs: {
+        places: 'Locais',
+        finances: 'Finanças',
+        settings: 'Ajustes',
+      },
+      tabs: {
+        places: 'Locais',
+        finances: 'Finanças',
+        settings: 'Ajustes',
+      },
     },
     cost: {
       total: 'Total',
@@ -163,6 +187,19 @@ const messages = {
       free: 'Grátis',
       tooltip:
         'Os preços aqui podem não estar atualizados. Toque em cada item para confirmar o valor mais recente.',
+    },
+    rightSidebar: {
+      places: {
+        empty: 'Nenhum local ainda. Adicione eventos com um local para vê-los aqui.',
+      },
+      finance: {
+        empty: 'Nenhum preço registrado ainda.',
+      },
+      settings: {
+        dates: 'Datas da viagem',
+        mapTheme: 'Tema do mapa',
+        language: 'Idioma',
+      },
     },
     language: {
       label: 'Idioma',
@@ -293,8 +330,11 @@ const messages = {
         day: 'Día',
         allDays: 'Todos los días',
       },
-      toggleHeader: 'Mostrar opciones del viaje',
-      hideHeader: 'Ocultar opciones del viaje',
+      tabs: {
+        places: 'Lugares',
+        finances: 'Finanzas',
+        settings: 'Ajustes',
+      },
     },
     cost: {
       total: 'Total',

@@ -4,6 +4,15 @@ const STYLE_STORAGE_KEY = 'tracker.mapStyle';
 
 export const MAP_STYLES = [
   {
+    id: 'osm-liberty',
+    label: 'OSM Liberty',
+    build: async () => {
+      const res = await fetch('https://tiles.openfreemap.org/styles/liberty');
+      if (!res.ok) throw new Error(`Failed to load OSM Liberty style (${res.status})`);
+      return res.json();
+    },
+  },
+  {
     id: 'osm',
     label: 'OSM Standard',
     build: () => ({
@@ -128,6 +137,71 @@ export const MAP_STYLES = [
       ],
     }),
   },
+  {
+    id: 'voyager',
+    label: 'Carto Voyager (colorful)',
+    build: () => ({
+      version: 8,
+      sources: {
+        voyager: {
+          type: 'raster',
+          tiles: [
+            'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+            'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+            'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+          ],
+          tileSize: 256,
+          attribution:
+            '&copy; OpenStreetMap contributors &copy; CARTO',
+        },
+      },
+      layers: [
+        {
+          id: 'voyager',
+          type: 'raster',
+          source: 'voyager',
+          paint: { 'raster-saturation': 0.35, 'raster-contrast': 0.05 },
+        },
+      ],
+    }),
+  },
+  {
+    id: 'osm-vivid',
+    label: 'OSM Vivid',
+    build: () => ({
+      version: 8,
+      sources: {
+        osm: {
+          type: 'raster',
+          tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+          tileSize: 256,
+          attribution: '&copy; OpenStreetMap contributors',
+        },
+      },
+      layers: [
+        {
+          id: 'osm-vivid',
+          type: 'raster',
+          source: 'osm',
+          paint: {
+            'raster-saturation': 0.6,
+            'raster-contrast': 0.2,
+            'raster-brightness-min': 0.05,
+            'raster-brightness-max': 0.95,
+          },
+        },
+      ],
+    }),
+  },
+  {
+    id: 'osm-bright',
+    label: 'OSM Bright',
+    build: async () => {
+      const res = await fetch('https://tiles.openfreemap.org/styles/bright');
+      if (!res.ok) throw new Error(`Failed to load OSM Bright style (${res.status})`);
+      return res.json();
+    },
+  },
 ];
 
 const STYLES_BY_ID = new Map(MAP_STYLES.map((s) => [s.id, s]));
@@ -172,6 +246,11 @@ export const getMap = () => state.map;
 export const getMapStyleId = () => state.mapStyleId;
 
 export const getMapStyle = () => {
+  const def = STYLES_BY_ID.get(state.mapStyleId) || MAP_STYLES[0];
+  return def.build();
+};
+
+export const loadMapStyle = async () => {
   const def = STYLES_BY_ID.get(state.mapStyleId) || MAP_STYLES[0];
   return def.build();
 };
