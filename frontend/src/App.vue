@@ -7,6 +7,7 @@ import EventSheet from './components/EventSheet.vue';
 import TripSelectModal from './components/TripSelectModal.vue';
 import TripCalendar from './components/TripCalendar.vue';
 import LeftSidebar from './components/LeftSidebar.vue';
+import ComparisonsView from './components/ComparisonsView.vue';
 import {
   appendStoredMarker,
   cancelPicking,
@@ -27,7 +28,11 @@ import {
   activeTrip,
   updateTrip,
 } from './stores/trips.js';
-import { migrateLegacyEvents, setLegacyMigrationTripId } from './stores/events.js';
+import {
+  addEventsFromPlan,
+  migrateLegacyEvents,
+  setLegacyMigrationTripId,
+} from './stores/events.js';
 import { reverseGeocode } from './lib/geocode.js';
 import { useI18n } from './lib/useI18n.js';
 
@@ -39,7 +44,7 @@ let moveEndHandler = null;
 let mapResizeObserver = null;
 
 const LEFT_VIEW_KEY = 'tracker.leftView';
-const VALID_VIEWS = ['day', 'allDays', 'places', 'finances', 'settings'];
+const VALID_VIEWS = ['day', 'allDays', 'plans', 'places', 'finances', 'settings'];
 const loadLeftView = () => {
   if (typeof localStorage === 'undefined') return 'day';
   try {
@@ -172,10 +177,24 @@ watch(
 );
 
 const sheetOpen = ref(false);
-const sheetContext = ref({ startDateTime: '', endDateTime: '', event: null });
+const sheetContext = ref({
+  startDateTime: '',
+  endDateTime: '',
+  event: null,
+  mode: 'event',
+  comparisonId: null,
+  planId: null,
+});
 
 const openSheet = ({ startDateTime, endDateTime }) => {
-  sheetContext.value = { startDateTime, endDateTime, event: null };
+  sheetContext.value = {
+    startDateTime,
+    endDateTime,
+    event: null,
+    mode: 'event',
+    comparisonId: null,
+    planId: null,
+  };
   sheetOpen.value = true;
   setSheetOpen(true);
 };
@@ -185,6 +204,22 @@ const openSheetForEdit = (event) => {
     startDateTime: event.startDateTime,
     endDateTime: event.endDateTime,
     event,
+    mode: 'event',
+    comparisonId: null,
+    planId: null,
+  };
+  sheetOpen.value = true;
+  setSheetOpen(true);
+};
+
+const openSheetForPlanItem = ({ startDateTime, endDateTime, item, comparisonId, planId }) => {
+  sheetContext.value = {
+    startDateTime,
+    endDateTime,
+    event: item ?? null,
+    mode: 'planItem',
+    comparisonId,
+    planId,
   };
   sheetOpen.value = true;
   setSheetOpen(true);
@@ -196,15 +231,7 @@ const closeSheet = () => {
   cancelPicking();
 };
 
-const onEventSubmitted = (event) => {
-  const isEdit = sheetContext.value.event != null;
-  if (isEdit) {
-    removeStoredMarkersFor(event);
-  }
-  if (trip.value && event.tripId && event.tripId !== trip.value.id) {
-    closeSheet();
-    return;
-  }
+const appendMarkersForEvent = (event) => {
   if (event.type === 'commute') {
     if (event.placeFromCoords) {
       appendStoredMarker({
@@ -233,10 +260,44 @@ const onEventSubmitted = (event) => {
       color: '#2b7fff',
     });
   }
+};
+
+const addPlanToTrip = ({ comparisonId, planId, items }) => {
+  if (!trip.value?.id || !trip.value.startDate) return;
+  const added = addEventsFromPlan({
+    tripId: trip.value.id,
+    comparisonId,
+    planId,
+    items,
+    startDate: trip.value.startDate,
+  });
+  added.forEach(appendMarkersForEvent);
+};
+
+const onEventSubmitted = (event) => {
+  const ctx = sheetContext.value;
+  if (ctx.mode === 'planItem') {
+    closeSheet();
+    return;
+  }
+  const isEdit = ctx.event != null;
+  if (isEdit) {
+    removeStoredMarkersFor(event);
+  }
+  if (trip.value && event.tripId && event.tripId !== trip.value.id) {
+    closeSheet();
+    return;
+  }
+  appendMarkersForEvent(event);
   closeSheet();
 };
 
 const onEventDeleted = (event) => {
+  const ctx = sheetContext.value;
+  if (ctx.mode === 'planItem') {
+    closeSheet();
+    return;
+  }
   removeStoredMarkersFor(event);
   closeSheet();
 };
@@ -670,7 +731,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="layout" :class="{ 'layout--all': leftView === 'allDays', 'layout--mobile': isMobile }">
+  <div class="layout" :class="{ 'layout--all': leftView === 'allDays', 'layout--plans': leftView === 'plans' && !isMobile, 'layout--mobile': isMobile }">
     <header class="topbar" :class="{ 'topbar--mobile': isMobile }">
       <div class="topbar-main">
         <div class="topbar-brand">
@@ -716,6 +777,7 @@ onBeforeUnmount(() => {
               v-for="view in [
                 { value: 'day', label: t('app.view.day') },
                 { value: 'allDays', label: t('app.view.allDays') },
+                { value: 'plans', label: t('app.view.plans') },
                 { value: 'places', label: t('app.tabs.places') },
                 { value: 'finances', label: t('app.tabs.finances') },
                 { value: 'settings', label: t('app.tabs.settings') },
@@ -765,6 +827,18 @@ onBeforeUnmount(() => {
           />
         </div>
 
+        <div
+          class="sidebar-calendar"
+          v-else-if="leftView === 'plans'"
+        >
+          <ComparisonsView
+            :trip-id="trip?.id ?? null"
+            @request-add-item="openSheetForPlanItem"
+            @request-edit-item="openSheetForPlanItem"
+            @request-add-plan-to-trip="addPlanToTrip"
+          />
+        </div>
+
         <LeftSidebar
           v-else-if="leftView === 'places' || leftView === 'finances' || leftView === 'settings'"
           :view="leftView"
@@ -796,6 +870,9 @@ onBeforeUnmount(() => {
           :end-date-time="sheetContext.endDateTime"
           :event="sheetContext.event"
           :trip-id="trip?.id ?? null"
+          :mode="sheetContext.mode"
+          :comparison-id="sheetContext.comparisonId"
+          :plan-id="sheetContext.planId"
           @close="closeSheet"
           @submitted="onEventSubmitted"
           @deleted="onEventDeleted"
@@ -834,6 +911,13 @@ onBeforeUnmount(() => {
 .layout--all .sidebar {
   flex: 1 1 50%;
   min-width: 0;
+}
+
+.layout--plans .sidebar {
+  flex: 0 0 620px;
+  width: 620px;
+  min-width: 620px;
+  max-width: 620px;
 }
 
 .sidebar {

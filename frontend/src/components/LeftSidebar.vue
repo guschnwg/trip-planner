@@ -252,8 +252,7 @@ const localeFlag = { en: 'EN', pt: 'PT', es: 'ES' };
 
 <style scoped>
 .left-sidebar-pane {
-  flex: 1;
-  display: flex;
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   padding: 10px 12px;
@@ -264,6 +263,8 @@ const localeFlag = { en: 'EN', pt: 'PT', es: 'ES' };
   flex-direction: column;
   gap: 8px;
   width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .empty {

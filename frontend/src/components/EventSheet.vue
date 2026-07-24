@@ -10,6 +10,11 @@ import {
   updateEvent,
 } from '../stores/events.js';
 import {
+  addPlanItem,
+  removePlanItem,
+  updatePlanItem,
+} from '../stores/trips.js';
+import {
   cancelPicking,
   clearPreviewMarkers,
   isPicking,
@@ -29,9 +34,14 @@ const props = defineProps({
   endDateTime: { type: String, default: '' },
   event: { type: Object, default: null },
   tripId: { type: String, default: null },
+  mode: { type: String, default: 'event' },
+  comparisonId: { type: String, default: null },
+  planId: { type: String, default: null },
 });
 
 const emit = defineEmits(['close', 'submitted', 'deleted']);
+
+const isPlanItem = computed(() => props.mode === 'planItem');
 
 const MOBILE_QUERY = '(max-width: 768px)';
 const isMobile = ref(false);
@@ -351,6 +361,28 @@ const handleSubmit = () => {
     return;
   }
 
+  if (isPlanItem.value) {
+    const planItemPayload = {
+      type: form.type,
+      description: form.description,
+      place: form.place,
+      placeCoords: form.placeCoords,
+      placeFrom: form.placeFrom,
+      placeFromCoords: form.placeFromCoords,
+      placeTo: form.placeTo,
+      placeToCoords: form.placeToCoords,
+      price: form.price,
+      currency: form.currency,
+      isPaid: form.isPaid,
+      links: form.links,
+    };
+    const stored = isEdit.value
+      ? updatePlanItem(props.tripId, props.comparisonId, props.planId, props.event.id, planItemPayload)
+      : addPlanItem(props.tripId, props.comparisonId, props.planId, planItemPayload);
+    if (stored) emit('submitted', stored);
+    return;
+  }
+
   const payload = {
     type: form.type,
     startDateTime: toISODateTime(start),
@@ -378,6 +410,11 @@ const handleSubmit = () => {
 
 const handleDelete = () => {
   if (!isEdit.value) return;
+  if (isPlanItem.value) {
+    removePlanItem(props.tripId, props.comparisonId, props.planId, props.event.id);
+    emit('deleted', props.event);
+    return;
+  }
   removeEvent(null, props.event.id);
   emit('deleted', props.event);
 };
@@ -436,7 +473,8 @@ onBeforeUnmount(() => {
       </button>
     </header>
 
-    <form class="sheet-body" @submit.prevent="handleSubmit">
+    <form class="sheet-form" @submit.prevent="handleSubmit">
+      <div class="sheet-body">
       <p class="hint">{{ t('eventSheet.hint') }}</p>
 
       <label class="field">
@@ -779,6 +817,7 @@ onBeforeUnmount(() => {
       <Transition name="error-fade">
         <p v-if="error" class="error">{{ error }}</p>
       </Transition>
+      </div>
 
       <footer class="sheet-footer">
         <button
@@ -884,6 +923,14 @@ onBeforeUnmount(() => {
   transform: rotate(90deg);
 }
 
+.sheet-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .sheet-body {
   display: flex;
   flex-direction: column;
@@ -891,6 +938,7 @@ onBeforeUnmount(() => {
   padding: 18px 20px;
   overflow-y: auto;
   flex: 1;
+  min-height: 0;
 }
 
 .hint {
@@ -1266,8 +1314,6 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   padding: 14px 20px;
-  margin-inline: -20px;
-  margin-bottom: -18px;
   border-top: 1px solid var(--color-border-soft);
   background: var(--color-surface-strong);
   flex-shrink: 0;

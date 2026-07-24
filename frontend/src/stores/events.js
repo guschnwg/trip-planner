@@ -192,6 +192,11 @@ const sanitize = (input) => {
         : 'USD',
     isPaid: input.isPaid === true,
     links: sanitizeLinks(input.links),
+    sourceComparisonId:
+      typeof input.sourceComparisonId === 'string' ? input.sourceComparisonId : null,
+    sourcePlanId: typeof input.sourcePlanId === 'string' ? input.sourcePlanId : null,
+    sourcePlanItemId:
+      typeof input.sourcePlanItemId === 'string' ? input.sourcePlanItemId : null,
   };
 };
 
@@ -225,6 +230,37 @@ export const getEventsOverlappingDate = (tripId, dateStr) => {
 
 export const getEventsForTrip = (tripId) => {
   return state.events.filter((e) => (e.tripId ?? null) === tripId);
+};
+
+export const addEventsFromPlan = ({ tripId, comparisonId, planId, items, startDate }) => {
+  const existingItemIds = new Set(
+    state.events
+      .filter((event) => event.tripId === tripId && event.sourcePlanId === planId)
+      .map((event) => event.sourcePlanItemId),
+  );
+  const start = parseDateTime(`${startDate}T09:00`);
+  if (!start || !Array.isArray(items)) return [];
+
+  const added = [];
+  for (const item of items) {
+    if (!item?.id || existingItemIds.has(item.id)) continue;
+    const itemStart = new Date(start.getTime() + added.length * 60 * 60 * 1000);
+    const itemEnd = new Date(itemStart.getTime() + 60 * 60 * 1000);
+    const event = sanitize({
+      ...item,
+      id: undefined,
+      tripId,
+      startDateTime: toISODateTime(itemStart),
+      endDateTime: toISODateTime(itemEnd),
+      sourceComparisonId: comparisonId,
+      sourcePlanId: planId,
+      sourcePlanItemId: item.id,
+    });
+    state.events.push(event);
+    added.push(event);
+  }
+  state.events.sort((a, b) => (a.startDateTime < b.startDateTime ? -1 : 1));
+  return added;
 };
 
 export const addEvent = (input) => {

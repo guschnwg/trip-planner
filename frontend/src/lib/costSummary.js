@@ -6,6 +6,10 @@ import { getEventsForTrip } from '../stores/events.js';
 //   - freeCount: number of events without a price
 export const summarizeCosts = (tripId) => {
   const events = getEventsForTrip(tripId);
+  return summarizeItems(events);
+};
+
+export const summarizeItems = (items) => {
   const buckets = new Map();
   let freeCount = 0;
 
@@ -16,7 +20,7 @@ export const summarizeCosts = (tripId) => {
     return buckets.get(currency);
   };
 
-  for (const event of events) {
+  for (const event of items || []) {
     if (event.price == null) {
       freeCount += 1;
       continue;
