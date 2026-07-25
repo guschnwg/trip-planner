@@ -4,6 +4,7 @@ import { getEventsForTrip } from '../stores/events.js';
 import { trips as tripsRef } from '../stores/trips.js';
 import { summarizeCosts, formatAmount } from '../lib/costSummary.js';
 import { useI18n } from '../lib/useI18n.js';
+import ViewToggle from './ViewToggle.vue';
 
 const props = defineProps({
   view: { type: String, required: true },
@@ -251,18 +252,13 @@ const localeFlag = { en: 'EN', pt: 'PT', es: 'ES' };
 <template>
   <div class="left-sidebar-pane">
     <div v-if="view === 'places'" class="tab-pane">
-      <div class="places-group-toggle view-toggle view-toggle--narrow">
-        <button
-          v-for="opt in groupOptions"
-          :key="opt.value"
-          type="button"
-          class="view-btn"
-          :class="{ active: groupMode === opt.value }"
-          @click="groupMode = opt.value"
-        >
-          {{ opt.label }}
-        </button>
-      </div>
+      <ViewToggle
+        v-model="groupMode"
+        :options="groupOptions"
+        narrow
+        force-mode="buttons"
+        class="places-group-toggle"
+      />
 
       <p v-if="!places.length" class="empty">{{ t('rightSidebar.places.empty') }}</p>
       <template v-else-if="groupMode === 'flat'">
@@ -555,12 +551,10 @@ const localeFlag = { en: 'EN', pt: 'PT', es: 'ES' };
 
 .places-group-toggle {
   align-self: flex-start;
-  gap: 2px;
-  padding: 3px;
 }
 
-.places-group-toggle .view-btn {
-  padding: 4px 10px;
+.places-group-toggle :deep(.view-toggle),
+.places-group-toggle :deep(.view-toggle-dropdown) {
   font-size: 11px;
 }
 

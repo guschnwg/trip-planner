@@ -9,6 +9,7 @@ const messages = {
       startDate: 'Start date',
       endDate: 'End date',
       dateError: 'End date must be on or after start date.',
+      viewMenu: 'Choose view',
       view: {
         day: 'Day',
         allDays: 'All days',
@@ -200,6 +201,7 @@ const messages = {
       startDate: 'Data de início',
       endDate: 'Data de fim',
       dateError: 'A data de fim deve ser igual ou posterior à data de início.',
+      viewMenu: 'Escolher vista',
       view: {
         day: 'Dia',
         allDays: 'Todos os dias',

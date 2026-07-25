@@ -8,6 +8,7 @@ import TripSelectModal from './components/TripSelectModal.vue';
 import TripCalendar from './components/TripCalendar.vue';
 import LeftSidebar from './components/LeftSidebar.vue';
 import ComparisonsView from './components/ComparisonsView.vue';
+import ViewToggle from './components/ViewToggle.vue';
 import {
   appendStoredMarker,
   cancelPicking,
@@ -57,6 +58,15 @@ const loadLeftView = () => {
 };
 
 const leftView = ref(loadLeftView());
+
+const leftViewOptions = computed(() => [
+  { value: 'day', label: t('app.view.day') },
+  { value: 'allDays', label: t('app.view.allDays') },
+  { value: 'plans', label: t('app.view.plans') },
+  { value: 'places', label: t('app.tabs.places') },
+  { value: 'finances', label: t('app.tabs.finances') },
+  { value: 'settings', label: t('app.tabs.settings') },
+]);
 
 const setLeftView = (next) => {
   if (!VALID_VIEWS.includes(next)) return;
@@ -772,25 +782,12 @@ onBeforeUnmount(() => {
 
       <div class="topbar-collapsible">
         <div class="topbar-section topbar-view">
-          <div class="view-toggle view-toggle--wide">
-            <button
-              v-for="view in [
-                { value: 'day', label: t('app.view.day') },
-                { value: 'allDays', label: t('app.view.allDays') },
-                { value: 'plans', label: t('app.view.plans') },
-                { value: 'places', label: t('app.tabs.places') },
-                { value: 'finances', label: t('app.tabs.finances') },
-                { value: 'settings', label: t('app.tabs.settings') },
-              ]"
-              :key="view.value"
-              class="view-btn"
-              :class="{ active: leftView === view.value }"
-              type="button"
-              @click="setLeftView(view.value)"
-            >
-              {{ view.label }}
-            </button>
-          </div>
+          <ViewToggle
+            :model-value="leftView"
+            :options="leftViewOptions"
+            :aria-label="t('app.viewMenu')"
+            @update:model-value="setLeftView"
+          />
         </div>
       </div>
     </header>
