@@ -35,6 +35,14 @@ const messages = {
     rightSidebar: {
       places: {
         empty: 'No places yet. Add events with a place to see them here.',
+        fromPlansTitle: 'From plans',
+        fromPlansEmpty: 'No places in plans yet.',
+        undated: 'No date',
+        group: {
+          flat: 'Flat',
+          byType: 'By type',
+          byDay: 'By day',
+        },
       },
       finance: {
         empty: 'No prices recorded yet.',
@@ -214,6 +222,14 @@ const messages = {
     rightSidebar: {
       places: {
         empty: 'Nenhum local ainda. Adicione eventos com um local para vê-los aqui.',
+        fromPlansTitle: 'De planos',
+        fromPlansEmpty: 'Nenhum local em planos ainda.',
+        undated: 'Sem data',
+        group: {
+          flat: 'Lista',
+          byType: 'Por tipo',
+          byDay: 'Por dia',
+        },
       },
       finance: {
         empty: 'Nenhum preço registrado ainda.',

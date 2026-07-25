@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { getEventsForTrip } from '../stores/events.js';
+import { trips as tripsRef } from '../stores/trips.js';
 import { summarizeCosts, formatAmount } from '../lib/costSummary.js';
 import { useI18n } from '../lib/useI18n.js';
 
@@ -72,6 +73,133 @@ const places = computed(() => {
   return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
 });
 
+const placesFromPlans = computed(() => {
+  const trip = props.tripId
+    ? tripsRef.value.find((x) => x.id === props.tripId)
+    : null;
+  if (!trip) return [];
+  const seen = new Map();
+  const collect = (name, coords, type, comparisonName, planName) => {
+    if (!name || !coords) return;
+    const key = `${coords.lng},${coords.lat}`;
+    const existing = seen.get(key);
+    if (existing) {
+      existing.uses += 1;
+      existing.comparisons.add(comparisonName);
+      existing.plans.add(planName);
+    } else {
+      seen.set(key, {
+        id: key,
+        name,
+        coords,
+        uses: 1,
+        type,
+        comparisons: new Set([comparisonName]),
+        plans: new Set([planName]),
+      });
+    }
+  };
+  for (const comparison of trip.comparisons) {
+    for (const plan of comparison.plans) {
+      for (const item of plan.items) {
+        if (item.type === 'commute') {
+          collect(item.placeFrom, item.placeFromCoords, item.type, comparison.name, plan.name);
+          collect(item.placeTo, item.placeToCoords, item.type, comparison.name, plan.name);
+        } else {
+          collect(item.place, item.placeCoords, item.type, comparison.name, plan.name);
+        }
+      }
+    }
+  }
+  return [...seen.values()]
+    .map((p) => ({
+      ...p,
+      comparisons: [...p.comparisons],
+      plans: [...p.plans],
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+});
+
+const groupMode = ref('flat');
+const groupOptions = computed(() => [
+  { value: 'flat', label: t('rightSidebar.places.group.flat') },
+  { value: 'type', label: t('rightSidebar.places.group.byType') },
+  { value: 'day', label: t('rightSidebar.places.group.byDay') },
+]);
+
+const groupByType = (list, countKey) => {
+  const buckets = new Map();
+  for (const place of list) {
+    const key = place.type || 'other';
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(place);
+  }
+  return [...buckets.entries()]
+    .map(([type, places]) => ({ type, places }))
+    .sort((a, b) => a.type.localeCompare(b.type));
+};
+
+const placesByType = computed(() => groupByType(places.value, 'eventCount'));
+const placesFromPlansByType = computed(() => groupByType(placesFromPlans.value, 'uses'));
+
+const dayKey = (iso) => (typeof iso === 'string' ? iso.slice(0, 10) : '');
+const dayLabel = (iso) => {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(locale.value, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+};
+
+const placesByDay = computed(() => {
+  const buckets = new Map();
+  const push = (placeKey, place) => {
+    const k = placeKey || 'undated';
+    if (!buckets.has(k)) buckets.set(k, []);
+    buckets.get(k).push(place);
+  };
+  for (const place of places.value) {
+    const dates = [];
+    for (const event of events.value) {
+      if (event.type === 'commute') {
+        if (event.placeFromCoords && place.coords &&
+            event.placeFromCoords.lng === place.coords.lng &&
+            event.placeFromCoords.lat === place.coords.lat) {
+          dates.push(dayKey(event.startDateTime));
+        }
+        if (event.placeToCoords && place.coords &&
+            event.placeToCoords.lng === place.coords.lng &&
+            event.placeToCoords.lat === place.coords.lat) {
+          dates.push(dayKey(event.startDateTime));
+        }
+      } else if (event.placeCoords && place.coords &&
+          event.placeCoords.lng === place.coords.lng &&
+          event.placeCoords.lat === place.coords.lat) {
+        dates.push(dayKey(event.startDateTime));
+      }
+    }
+    const uniq = [...new Set(dates.filter(Boolean))].sort();
+    if (uniq.length) {
+      for (const d of uniq) push(d, place);
+    } else {
+      push('', place);
+    }
+  }
+  const entries = [...buckets.entries()];
+  entries.sort(([a], [b]) => {
+    if (a === '' && b !== '') return 1;
+    if (b === '' && a !== '') return -1;
+    return a < b ? -1 : a > b ? 1 : 0;
+  });
+  return entries.map(([key, list]) => ({
+    key: key || 'undated',
+    label: key ? dayLabel(key) : t('rightSidebar.places.undated'),
+    places: list.sort((a, b) => a.name.localeCompare(b.name)),
+  }));
+});
+
 const financialRows = computed(() => {
   const rows = [];
   for (const event of events.value) {
@@ -123,27 +251,156 @@ const localeFlag = { en: 'EN', pt: 'PT', es: 'ES' };
 <template>
   <div class="left-sidebar-pane">
     <div v-if="view === 'places'" class="tab-pane">
-      <p v-if="!places.length" class="empty">{{ t('rightSidebar.places.empty') }}</p>
-      <ul v-else class="place-list">
-        <li
-          v-for="place in places"
-          :key="place.id"
-          class="place-item"
-          @click="onPlaceClick(place)"
+      <div class="places-group-toggle view-toggle view-toggle--narrow">
+        <button
+          v-for="opt in groupOptions"
+          :key="opt.value"
+          type="button"
+          class="view-btn"
+          :class="{ active: groupMode === opt.value }"
+          @click="groupMode = opt.value"
         >
-          <span
-            class="place-dot"
-            :style="{ background: `var(--cat-${place.type}, var(--color-primary))` }"
-            aria-hidden="true"
-          ></span>
-          <div class="place-info">
-            <span class="place-name">{{ place.name }}</span>
-            <span class="place-meta">
-              {{ eventTypeLabel(place.type) }} · {{ place.eventCount }}×
-            </span>
-          </div>
-        </li>
-      </ul>
+          {{ opt.label }}
+        </button>
+      </div>
+
+      <p v-if="!places.length" class="empty">{{ t('rightSidebar.places.empty') }}</p>
+      <template v-else-if="groupMode === 'flat'">
+        <ul class="place-list">
+          <li
+            v-for="place in places"
+            :key="place.id"
+            class="place-item"
+            @click="onPlaceClick(place)"
+          >
+            <span
+              class="place-dot"
+              :style="{ background: `var(--cat-${place.type}, var(--color-primary))` }"
+              aria-hidden="true"
+            ></span>
+            <div class="place-info">
+              <span class="place-name">{{ place.name }}</span>
+              <span class="place-meta">
+                {{ eventTypeLabel(place.type) }} · {{ place.eventCount }}×
+              </span>
+            </div>
+          </li>
+        </ul>
+      </template>
+      <template v-else-if="groupMode === 'type'">
+        <section
+          v-for="bucket in placesByType"
+          :key="`type-${bucket.type}`"
+          class="places-subsection"
+        >
+          <h4 class="places-subsection-title">{{ eventTypeLabel(bucket.type) }}</h4>
+          <ul class="place-list">
+            <li
+              v-for="place in bucket.places"
+              :key="place.id"
+              class="place-item"
+              @click="onPlaceClick(place)"
+            >
+              <span
+                class="place-dot"
+                :style="{ background: `var(--cat-${place.type}, var(--color-primary))` }"
+                aria-hidden="true"
+              ></span>
+              <div class="place-info">
+                <span class="place-name">{{ place.name }}</span>
+                <span class="place-meta">{{ place.eventCount }}×</span>
+              </div>
+            </li>
+          </ul>
+        </section>
+      </template>
+      <template v-else>
+        <section
+          v-for="bucket in placesByDay"
+          :key="`day-${bucket.key}`"
+          class="places-subsection"
+        >
+          <h4 class="places-subsection-title">{{ bucket.label }}</h4>
+          <ul class="place-list">
+            <li
+              v-for="place in bucket.places"
+              :key="place.id"
+              class="place-item"
+              @click="onPlaceClick(place)"
+            >
+              <span
+                class="place-dot"
+                :style="{ background: `var(--cat-${place.type}, var(--color-primary))` }"
+                aria-hidden="true"
+              ></span>
+              <div class="place-info">
+                <span class="place-name">{{ place.name }}</span>
+                <span class="place-meta">
+                  {{ eventTypeLabel(place.type) }} · {{ place.eventCount }}×
+                </span>
+              </div>
+            </li>
+          </ul>
+        </section>
+      </template>
+
+      <section class="places-subsection">
+        <h4 class="places-subsection-title">{{ t('rightSidebar.places.fromPlansTitle') }}</h4>
+        <p v-if="!placesFromPlans.length" class="empty">
+          {{ t('rightSidebar.places.fromPlansEmpty') }}
+        </p>
+        <template v-else>
+          <template v-if="groupMode === 'type'">
+            <section
+              v-for="bucket in placesFromPlansByType"
+              :key="`ptype-${bucket.type}`"
+              class="places-subsection"
+            >
+              <h4 class="places-subsection-title">{{ eventTypeLabel(bucket.type) }}</h4>
+              <ul class="place-list">
+                <li
+                  v-for="place in bucket.places"
+                  :key="`plan-${place.id}`"
+                  class="place-item"
+                  @click="onPlaceClick(place)"
+                >
+                  <span
+                    class="place-dot"
+                    :style="{ background: `var(--cat-${place.type}, var(--color-primary))` }"
+                    aria-hidden="true"
+                  ></span>
+                  <div class="place-info">
+                    <span class="place-name">{{ place.name }}</span>
+                    <span class="place-meta">{{ place.uses }}×</span>
+                  </div>
+                </li>
+              </ul>
+            </section>
+          </template>
+          <template v-else>
+            <ul class="place-list">
+              <li
+                v-for="place in placesFromPlans"
+                :key="`plan-${place.id}`"
+                class="place-item"
+                @click="onPlaceClick(place)"
+              >
+                <span
+                  class="place-dot"
+                  :style="{ background: `var(--cat-${place.type}, var(--color-primary))` }"
+                  aria-hidden="true"
+                ></span>
+                <div class="place-info">
+                  <span class="place-name">{{ place.name }}</span>
+                  <span class="place-meta">
+                    {{ eventTypeLabel(place.type) }} · {{ place.uses }}×
+                  </span>
+                </div>
+              </li>
+            </ul>
+          </template>
+        </template>
+      </section>
     </div>
 
     <div v-else-if="view === 'finances'" class="tab-pane">
@@ -272,6 +529,45 @@ const localeFlag = { en: 'EN', pt: 'PT', es: 'ES' };
   text-align: center;
   font-size: 12px;
   color: var(--color-text-faint);
+}
+
+.places-subsection {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.places-subsection-title {
+  margin: 0;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  font-weight: 700;
+}
+
+.places-subsection .empty {
+  margin: 4px 0;
+}
+
+.places-group-toggle {
+  align-self: flex-start;
+  gap: 2px;
+  padding: 3px;
+}
+
+.places-group-toggle .view-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
+.places-subsection + .places-subsection {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--color-border-soft);
 }
 
 .place-list,

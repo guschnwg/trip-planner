@@ -732,7 +732,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="layout" :class="{ 'layout--all': leftView === 'allDays', 'layout--plans': leftView === 'plans' && !isMobile, 'layout--mobile': isMobile }">
-    <header class="topbar" :class="{ 'topbar--mobile': isMobile }">
+    <header class="topbar">
       <div class="topbar-main">
         <div class="topbar-brand">
           <div class="topbar-actions-row">
@@ -961,8 +961,9 @@ onBeforeUnmount(() => {
 .topbar {
   display: flex;
   flex-direction: row;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--color-border);
@@ -986,8 +987,8 @@ onBeforeUnmount(() => {
   align-items: center;
   flex-wrap: wrap;
   gap: 12px;
-  flex: 1 1 auto;
   min-width: 0;
+  overflow-x: auto;
 }
 
 .topbar--mobile {
@@ -1001,6 +1002,8 @@ onBeforeUnmount(() => {
   gap: 10px;
   padding-top: 10px;
   border-top: 1px solid var(--color-border-soft);
+  overflow-x: auto;
+  width: 100%;
 }
 
 .topbar--mobile .topbar-section {
