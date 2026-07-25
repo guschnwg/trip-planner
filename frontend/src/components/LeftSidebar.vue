@@ -229,6 +229,77 @@ const totals = computed(() => {
   return summarizeCosts(props.tripId);
 });
 
+const moneyGroupMode = ref('flat');
+const moneyGroupOptions = computed(() => [
+  { value: 'flat', label: t('rightSidebar.finance.group.flat') },
+  { value: 'type', label: t('rightSidebar.finance.group.byType') },
+  { value: 'day', label: t('rightSidebar.finance.group.byDay') },
+  { value: 'paid', label: t('rightSidebar.finance.group.byPaid') },
+]);
+
+const groupFinancialsBy = (mode) => {
+  const rows = financialRows.value;
+  if (mode === 'flat') {
+    return [{ key: 'all', label: '', rows }];
+  }
+  const buckets = new Map();
+  const add = (key, label, row) => {
+    if (!buckets.has(key)) buckets.set(key, { key, label, rows: [] });
+    buckets.get(key).rows.push(row);
+  };
+  for (const row of rows) {
+    if (mode === 'type') {
+      add(row.type || 'other', eventTypeLabel(row.type || 'other'), row);
+    } else if (mode === 'paid') {
+      if (row.price == null) add('free', t('rightSidebar.finance.status.free'), row);
+      else if (row.isPaid) add('paid', t('rightSidebar.finance.status.paid'), row);
+      else add('pending', t('rightSidebar.finance.status.pending'), row);
+    } else if (mode === 'day') {
+      const key = dayKey(row.event?.startDateTime) || '';
+      add(key || 'undated', key ? dayLabel(key) : t('rightSidebar.finance.undated'), row);
+    }
+  }
+  const entries = [...buckets.values()];
+  if (mode === 'day') {
+    entries.sort((a, b) => {
+      if (a.key === 'undated') return 1;
+      if (b.key === 'undated') return -1;
+      return a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
+    });
+  } else if (mode === 'type') {
+    entries.sort((a, b) => a.label.localeCompare(b.label));
+  } else if (mode === 'paid') {
+    const order = { paid: 0, pending: 1, free: 2 };
+    entries.sort((a, b) => (order[a.key] ?? 9) - (order[b.key] ?? 9));
+  }
+  return entries;
+};
+
+const financialGroups = computed(() => groupFinancialsBy(moneyGroupMode.value));
+
+const summarizeGroup = (rows) => {
+  const buckets = new Map();
+  let freeCount = 0;
+  const ensure = (c) => {
+    if (!buckets.has(c)) buckets.set(c, { currency: c, total: 0, paid: 0, pending: 0 });
+    return buckets.get(c);
+  };
+  for (const row of rows) {
+    if (row.price == null) {
+      freeCount += 1;
+      continue;
+    }
+    const b = ensure(row.currency || 'USD');
+    b.total += row.price;
+    if (row.isPaid) b.paid += row.price;
+    else b.pending += row.price;
+  }
+  return {
+    buckets: [...buckets.values()].sort((a, b) => a.currency.localeCompare(b.currency)),
+    freeCount,
+  };
+};
+
 const formatFor = (currency) => (amount) => formatAmount(amount, currency, locale.value);
 
 const onPlaceClick = (place) => {
@@ -406,42 +477,80 @@ const localeFlag = { en: 'EN', pt: 'PT', es: 'ES' };
           <div
             v-for="bucket in totals.buckets"
             :key="`bucket-${bucket.currency}`"
-            class="finance-bucket"
+            class="finance-totals-card"
           >
-            <span class="finance-label">{{ t('cost.total') }}</span>
-            <span class="finance-amount">{{ formatFor(bucket.currency)(bucket.total) }}</span>
-            <span class="finance-sub">
-              {{ t('cost.paid') }}: {{ formatFor(bucket.currency)(bucket.paid) }}
-            </span>
-            <span class="finance-sub">
-              {{ t('cost.pending') }}: {{ formatFor(bucket.currency)(bucket.pending) }}
-            </span>
+            <span class="finance-totals-amount">{{ formatFor(bucket.currency)(bucket.total) }}</span>
+            <div class="finance-totals-badges">
+              <span class="finance-badge finance-badge--paid">
+                {{ formatFor(bucket.currency)(bucket.paid) }}
+              </span>
+              <span v-if="bucket.pending" class="finance-badge finance-badge--pending">
+                {{ formatFor(bucket.currency)(bucket.pending) }}
+              </span>
+            </div>
           </div>
-          <div v-if="totals.freeCount" class="finance-free">
-            {{ t('cost.free') }}: {{ totals.freeCount }}
+          <div v-if="totals.freeCount" class="finance-totals-free">
+            <span class="finance-badge finance-badge--free">
+              {{ t('cost.free') }} {{ totals.freeCount }}
+            </span>
           </div>
         </div>
 
-        <ul class="finance-list">
-          <li
-            v-for="row in financialRows"
-            :key="row.id"
-            class="finance-row"
-            :class="{ 'is-paid': row.isPaid, 'is-free': row.price == null }"
-            @click="onFinancialRowClick(row)"
-          >
-            <span
-              class="finance-type-dot"
-              :style="{ background: `var(--cat-${row.type}, var(--color-primary))` }"
-              aria-hidden="true"
-            ></span>
-            <span class="finance-desc">{{ row.description || eventTypeLabel(row.type) }}</span>
-            <span class="finance-price">
-              <template v-if="row.price == null">{{ t('event.free') }}</template>
-              <template v-else>{{ formatFor(row.currency)(row.price) }}</template>
-            </span>
-          </li>
-        </ul>
+        <ViewToggle
+          v-model="moneyGroupMode"
+          :options="moneyGroupOptions"
+          narrow
+          force-mode="buttons"
+          class="finance-group-toggle"
+        />
+
+        <section
+          v-for="group in financialGroups"
+          :key="`group-${group.key}`"
+          class="finance-group"
+          :class="{ 'finance-group--flat': moneyGroupMode === 'flat' }"
+        >
+          <template v-if="moneyGroupMode !== 'flat' && (group.rows.length > 1 || group.label)">
+            <header class="finance-group-header">
+              <span class="finance-group-title">{{ group.label }}</span>
+              <div class="finance-group-summary">
+                <template
+                  v-for="b in summarizeGroup(group.rows).buckets"
+                  :key="`${group.key}-${b.currency}`"
+                >
+                  <span class="finance-group-total">{{ formatFor(b.currency)(b.total) }}</span>
+                </template>
+                <span
+                  v-if="summarizeGroup(group.rows).freeCount"
+                  class="finance-group-free"
+                >
+                  · {{ summarizeGroup(group.rows).freeCount }} {{ t('cost.free') }}
+                </span>
+              </div>
+            </header>
+          </template>
+
+          <ul class="finance-list">
+            <li
+              v-for="row in group.rows"
+              :key="row.id"
+              class="finance-row"
+              :class="{ 'is-paid': row.isPaid, 'is-free': row.price == null }"
+              @click="onFinancialRowClick(row)"
+            >
+              <span
+                class="finance-type-dot"
+                :style="{ background: `var(--cat-${row.type}, var(--color-primary))` }"
+                aria-hidden="true"
+              ></span>
+              <span class="finance-desc">{{ row.description || eventTypeLabel(row.type) }}</span>
+              <span class="finance-price">
+                <template v-if="row.price == null">{{ t('event.free') }}</template>
+                <template v-else>{{ formatFor(row.currency)(row.price) }}</template>
+              </span>
+            </li>
+          </ul>
+        </section>
       </template>
     </div>
 
@@ -631,46 +740,124 @@ const localeFlag = { en: 'EN', pt: 'PT', es: 'ES' };
 .finance-totals {
   display: flex;
   flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding-bottom: 8px;
+}
+
+.finance-totals-card {
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--color-border-soft);
-  margin-bottom: 4px;
-}
-
-.finance-bucket {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px 12px;
-  border-radius: var(--radius-md);
-  background: var(--color-surface-strong);
+  padding: 6px 10px 6px 12px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(135deg, var(--color-primary-soft) 0%, var(--color-accent-soft) 100%);
   border: 1px solid var(--color-border-soft);
+  box-shadow: var(--shadow-sm);
 }
 
-.finance-label {
+.finance-totals-amount {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--color-primary-strong);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.finance-totals-badges {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.finance-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
   font-size: 10px;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-strong);
   color: var(--color-text-muted);
-  font-weight: 700;
+  border: 1px solid var(--color-border-soft);
+  font-variant-numeric: tabular-nums;
 }
 
-.finance-amount {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--color-text);
+.finance-badge--paid {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--color-success, #10b981);
+  border-color: rgba(16, 185, 129, 0.35);
 }
 
-.finance-sub {
-  font-size: 11px;
-  color: var(--color-text-faint);
-}
-
-.finance-free {
-  font-size: 12px;
-  font-weight: 600;
+.finance-badge--pending {
+  background: rgba(245, 158, 11, 0.12);
   color: var(--color-warning, #f59e0b);
-  align-self: center;
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.finance-badge--free {
+  background: var(--color-surface-strong);
+  color: var(--color-warning, #f59e0b);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.finance-totals-free {
+  display: inline-flex;
+}
+
+.finance-group-toggle {
+  margin-top: 8px;
+}
+
+.finance-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.finance-group-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 4px 4px;
+  border-bottom: 1px dashed var(--color-border-soft);
+}
+
+.finance-group-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+
+.finance-group-summary {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.finance-group-total {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.finance-group-free {
+  font-size: 11px;
+  color: var(--color-warning, #f59e0b);
+  font-weight: 600;
+}
+
+.finance-group + .finance-group {
+  margin-top: 12px;
 }
 
 .finance-row {

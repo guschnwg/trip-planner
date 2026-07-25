@@ -47,6 +47,18 @@ const messages = {
       },
       finance: {
         empty: 'No prices recorded yet.',
+        undated: 'No date',
+        group: {
+          flat: 'Flat',
+          byType: 'By type',
+          byDay: 'By day',
+          byPaid: 'By paid',
+        },
+        status: {
+          paid: 'Paid',
+          pending: 'Planned',
+          free: 'Free',
+        },
       },
       settings: {
         dates: 'Trip dates',
@@ -235,6 +247,18 @@ const messages = {
       },
       finance: {
         empty: 'Nenhum preço registrado ainda.',
+        undated: 'Sem data',
+        group: {
+          flat: 'Lista',
+          byType: 'Por tipo',
+          byDay: 'Por dia',
+          byPaid: 'Por status',
+        },
+        status: {
+          paid: 'Pago',
+          pending: 'Planejado',
+          free: 'Grátis',
+        },
       },
       settings: {
         dates: 'Datas da viagem',
