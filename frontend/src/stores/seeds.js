@@ -1502,6 +1502,15 @@ const bariloche = (start) => {
     currency: 'BRL',
     links,
   });
+  const stay = (checkInDate, checkInTime, checkoutDate, checkoutTime, description, place, price) => ({
+    type: 'accommodation',
+    description,
+    place,
+    startDateTime: `${checkInDate}T${checkInTime}`,
+    endDateTime: `${checkoutDate}T${checkoutTime}`,
+    price,
+    currency: 'BRL',
+  });
   const catedral = [
     item(d(0), '09:00', 'Snowboard day 1 — lift pass', 'Cerro Catedral', 160000, [{ label: 'Official rates', url: 'https://catedralaltapatagonia.com/tarifas/' }]),
     item(d(0), '08:00', 'Snowboard rental day 1 — estimated from official package pricing', 'Cerro Catedral', 80000),
@@ -1546,15 +1555,15 @@ const bariloche = (start) => {
     ],
     events: [
       brlItem(d(0), '08:00', '10:00', 'Arrive at airport and pick up rental car', 'Bariloche Airport (BRC)', 1800, 'commute'),
-      brlItem(d(0), '18:00', '19:00', 'Bariloche stay', 'Bariloche accommodation', 1500, 'accommodation'),
+      stay(d(0), '18:00', d(3), '11:00', 'Bariloche stay', 'Bariloche accommodation', 1500),
       brlItem(d(0), '20:00', '22:00', 'Vegetarian dinner', 'Ren Vegetariano, Bariloche', null, 'food', [{ label: 'Restaurant details', url: 'https://www.tripadvisor.com/Restaurant_Review-g312848-d6678521-Reviews-Ren_Vegetariano-San_Carlos_de_Bariloche_Province_of_Rio_Negro_Patagonia.html' }]),
       brlItem(d(1), '09:00', '14:00', 'Circuito Chico', 'Circuito Chico, Bariloche', 0, 'activity'),
       brlItem(d(1), '14:00', '15:30', 'Vegetarian lunch', 'Restaurante Punto Panorámico, Bariloche', null, 'food', [{ label: 'Restaurant details', url: 'https://www.tripadvisor.com/Restaurant_Review-g312848-d2388398-Reviews-Restaurant_Punto_Panoramico-San_Carlos_de_Bariloche_Province_of_Rio_Negro_Patagonia.html' }]),
       brlItem(d(1), '20:00', '22:00', 'Vegetarian dinner', 'Quiven Patagonia House Kitchen, Bariloche', null, 'food', [{ label: 'Restaurant details', url: 'https://www.tripadvisor.com/Restaurant_Review-g312848-d14024385-Reviews-Quiven_Patagonia_House_Kitchen-San_Carlos_de_Bariloche_Province_of_Rio_Negro_Patagonia.html' }]),
       brlItem(d(2), '09:00', '14:00', 'Cascada Los Alerces', 'Cascada Los Alerces, Bariloche', 0, 'activity'),
       brlItem(d(2), '14:00', '15:30', 'Vegetarian lunch', 'Almacén de Sabores, Bariloche', null, 'food', [{ label: 'Restaurant details', url: 'https://www.tripadvisor.com/Restaurant_Review-g312848-d2012566-Reviews-Almazen_de_Sabores-San_Carlos_de_Bariloche_Province_of_Rio_Negro_Patagonia.html' }]),
-      brlItem(d(3), '14:00', '18:00', 'Drive Ruta de los 7 Lagos to Villa La Angostura', 'Ruta de los 7 Lagos', null, 'commute'),
-      brlItem(d(3), '18:00', '19:00', 'Villa La Angostura stay', 'Villa La Angostura accommodation', 1800, 'accommodation'),
+      brlItem(d(3), '11:00', '18:00', 'Drive Ruta de los 7 Lagos to Villa La Angostura', 'Ruta de los 7 Lagos', null, 'commute'),
+      stay(d(3), '18:00', d(7), '09:00', 'Villa La Angostura stay', 'Villa La Angostura accommodation', 1800),
       brlItem(d(3), '20:00', '22:00', 'Vegetarian dinner', "Pistach', Villa La Angostura", null, 'food', [{ label: 'Restaurant details', url: 'https://www.tripadvisor.com/Restaurant_Review-g312844-d7597555-Reviews-Pistach-Villa_La_Angostura_Province_of_Neuquen_Patagonia.html' }]),
       brlItem(d(4), '13:00', '14:30', 'Vegetarian lunch', 'Nanuko Cervecería, Villa La Angostura', null, 'food', [{ label: 'Restaurant details', url: 'https://www.tripadvisor.com/Restaurant_Review-g312844-d2640310-Reviews-Nanuko_Cerveceria-Villa_La_Angostura_Province_of_Neuquen_Patagonia.html' }]),
       brlItem(d(4), '20:00', '22:00', 'Vegetarian dinner', 'Tinto Bistro, Villa La Angostura', null, 'food', [{ label: 'Restaurant details', url: 'https://www.tripadvisor.com/Restaurant_Review-g312844-d1412962-Reviews-Tinto_Bistro-Villa_La_Angostura_Province_of_Neuquen_Patagonia.html' }]),
