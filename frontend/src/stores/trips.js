@@ -105,6 +105,8 @@ const sanitizePlanItem = (input) => {
     id: typeof input?.id === 'string' && input.id ? input.id : generateId(),
     type,
     description: typeof input?.description === 'string' ? input.description.trim() : '',
+    startDateTime: typeof input?.startDateTime === 'string' ? input.startDateTime : '',
+    endDateTime: typeof input?.endDateTime === 'string' ? input.endDateTime : '',
     place: !isCommute && typeof input?.place === 'string' ? input.place.trim() : '',
     placeCoords: !isCommute && isCoordPair(input?.placeCoords)
       ? { lng: input.placeCoords.lng, lat: input.placeCoords.lat }

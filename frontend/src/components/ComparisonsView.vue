@@ -236,12 +236,6 @@ const itemDescription = (item) =>
               class="summary-bucket"
             >
               <span class="summary-total">{{ formatFor(bucket.currency)(bucket.total) }}</span>
-              <span class="summary-sub">
-                {{ t('cost.paid') }}: {{ formatFor(bucket.currency)(bucket.paid) }}
-              </span>
-              <span class="summary-sub">
-                {{ t('cost.pending') }}: {{ formatFor(bucket.currency)(bucket.pending) }}
-              </span>
             </div>
           </template>
           <div v-else class="summary-empty">{{ t('cost.total') }}: —</div>
@@ -266,26 +260,17 @@ const itemDescription = (item) =>
               :style="{ background: `var(--cat-${item.type}, var(--color-primary))` }"
               aria-hidden="true"
             ></span>
-            <div class="item-body">
-              <span class="item-desc">{{ itemDescription(item) }}</span>
-              <span class="item-type">{{ localizedEventTypes[item.type] }}</span>
-            </div>
-            <button
-              class="paid-chip"
-              type="button"
-              :class="{ 'is-paid': item.isPaid }"
-              :aria-label="t('comparisons.paidToggle')"
-              @click.stop="togglePaid(plan, item)"
-            >
-              <template v-if="item.price == null">{{ t('event.free') }}</template>
-              <template v-else-if="item.isPaid">{{ t('event.paid') }}</template>
-              <template v-else>{{ t('event.planned') }}</template>
-            </button>
-            <span class="item-price">
-              <template v-if="item.price == null">—</template>
-              <template v-else>{{ formatFor(item.currency || 'USD')(item.price) }}</template>
-            </span>
-            <button
+              <div class="item-body">
+                <span class="item-desc">{{ itemDescription(item) }}</span>
+                <span class="item-type">
+                  {{ localizedEventTypes[item.type] }}
+                  <template v-if="item.startDateTime"> · {{ item.startDateTime.replace('T', ' ') }}</template>
+                </span>
+                <span v-if="item.price != null" class="item-price">
+                  {{ formatFor(item.currency)(item.price) }}
+                </span>
+              </div>
+              <button
               class="icon-btn danger item-remove"
               type="button"
               :aria-label="t('comparisons.deleteItem')"
@@ -511,7 +496,7 @@ const itemDescription = (item) =>
   display: flex;
   flex-direction: column;
   flex: 0 0 calc((100% - 28px - 90px) / 3);
-  min-width: 240px;
+  min-width: 300px;
   max-width: 360px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -555,11 +540,6 @@ const itemDescription = (item) =>
   font-variant-numeric: tabular-nums;
 }
 
-.summary-sub {
-  font-size: 11px;
-  color: var(--color-text-faint);
-}
-
 .summary-empty {
   font-size: 13px;
   font-weight: 700;
@@ -591,10 +571,10 @@ const itemDescription = (item) =>
 
 .item-card {
   display: grid;
-  grid-template-columns: auto 1fr auto auto auto;
-  align-items: center;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 10px;
   border-radius: var(--radius-md);
   background: var(--color-surface-strong);
   border: 1px solid var(--color-border-soft);
@@ -623,6 +603,7 @@ const itemDescription = (item) =>
 .item-body {
   display: flex;
   flex-direction: column;
+  gap: 3px;
   min-width: 0;
 }
 
@@ -630,9 +611,7 @@ const itemDescription = (item) =>
   font-size: 13px;
   font-weight: 600;
   color: var(--color-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .item-type {
@@ -664,6 +643,11 @@ const itemDescription = (item) =>
 }
 
 .item-price {
+  align-self: flex-start;
+  margin-top: 3px;
+  padding: 4px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-muted);
   font-size: 13px;
   font-weight: 700;
   color: var(--color-text);
@@ -701,15 +685,6 @@ const itemDescription = (item) =>
 .icon-btn.danger:hover {
   background: var(--color-danger-soft);
   color: var(--color-danger);
-}
-
-.item-remove {
-  opacity: 0;
-  transition: opacity var(--dur-fast) var(--ease-out);
-}
-
-.item-card:hover .item-remove {
-  opacity: 1;
 }
 
 .plan-actions {

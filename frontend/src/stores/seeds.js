@@ -1480,6 +1480,92 @@ const brazil = (start) => {
   };
 };
 
+const bariloche = (start) => {
+  const d = (n) => addDays(start, n);
+  const item = (date, time, description, place, price, links = [], type = 'activity') => ({
+    type,
+    description,
+    place,
+    startDateTime: `${date}T${time}`,
+    endDateTime: `${date}T${time === '09:00' ? '17:00' : '10:00'}`,
+    price,
+    currency: 'ARS',
+    links,
+  });
+  const brlItem = (date, start, end, description, place, price, type = 'other', links = []) => ({
+    type,
+    description,
+    place,
+    startDateTime: `${date}T${start}`,
+    endDateTime: `${date}T${end}`,
+    price,
+    currency: 'BRL',
+    links,
+  });
+  const catedral = [
+    item(d(0), '09:00', 'Snowboard day 1 — lift pass', 'Cerro Catedral', 160000, [{ label: 'Official rates', url: 'https://catedralaltapatagonia.com/tarifas/' }]),
+    item(d(0), '08:00', 'Snowboard rental day 1 — estimated from official package pricing', 'Cerro Catedral', 80000),
+    item(d(0), '10:00', 'Snowboard class day 1 — estimated; confirm at checkout', 'Cerro Catedral', 80000),
+    item(d(1), '09:00', 'Snowboard day 2 — lift pass', 'Cerro Catedral', 160000),
+    item(d(1), '08:00', 'Snowboard rental day 2 — estimated from official package pricing', 'Cerro Catedral', 80000),
+    item(d(2), '09:00', 'Snowboard day 3 — lift pass', 'Cerro Catedral', 160000),
+    item(d(2), '08:00', 'Snowboard rental day 3 — estimated from official package pricing', 'Cerro Catedral', 80000),
+  ];
+  const bayo = [
+    item(d(0), '09:00', 'Snowboard day 1 — lift pass', 'Cerro Bayo', 136500, [{ label: 'Official rates', url: 'https://www.cerrobayo.com/tarifas/' }]),
+    item(d(0), '08:00', 'Snowboard rental day 1 — Yeti full equipment', 'Cerro Bayo', 122500, [{ label: 'Official rental rates', url: 'https://www.cerrobayo.com/tarifas/rental-equipos.php' }]),
+    item(d(0), '10:00', 'Snowboard class day 1 — group class allocation', 'Cerro Bayo', 100967, [{ label: 'Official school rates', url: 'https://www.cerrobayo.com/tarifas/escuela-combinada.php' }]),
+    item(d(1), '09:00', 'Snowboard day 2 — lift pass', 'Cerro Bayo', 136500),
+    item(d(1), '08:00', 'Snowboard rental day 2 — Yeti full equipment', 'Cerro Bayo', 122500),
+    item(d(2), '09:00', 'Snowboard day 3 — lift pass', 'Cerro Bayo', 136500),
+    item(d(2), '08:00', 'Snowboard rental day 3 — Yeti full equipment', 'Cerro Bayo', 122500),
+  ];
+  const lago = [
+    item(d(0), '09:00', 'Ski day 1 — lift pass', 'Lago Hermoso', 89000, [{ label: 'Official rates', url: 'https://www.lagohermoso.com.ar/invierno-2/tarifas' }]),
+    item(d(0), '08:00', 'Ski rental day 1 — estimated from 3-day pack difference', 'Lago Hermoso', 33333),
+    item(d(0), '10:00', 'Ski class day 1 — 2 h initiation class, estimated from pack', 'Lago Hermoso', 66667),
+    item(d(1), '09:00', 'Ski day 2 — lift pass', 'Lago Hermoso', 89000),
+    item(d(1), '08:00', 'Ski rental day 2 — estimated from 3-day pack difference', 'Lago Hermoso', 33333),
+    item(d(2), '09:00', 'Ski day 3 — lift pass', 'Lago Hermoso', 89000),
+    item(d(2), '08:00', 'Ski rental day 3 — estimated from 3-day pack difference', 'Lago Hermoso', 33334),
+  ];
+  return {
+    name: 'Bariloche & Villa La Angostura',
+    startDate: start,
+    endDate: d(7),
+    mapView: { lng: -71.55, lat: -40.85, zoom: 8, bearing: 0 },
+    comparisons: [
+      {
+        name: 'Snowboard and ski resorts',
+        plans: [
+          { name: 'Cerro Catedral — 3 days', items: catedral },
+          { name: 'Cerro Bayo — 3 days', items: bayo },
+          { name: 'Lago Hermoso — 3 days', items: lago },
+        ],
+      },
+    ],
+    events: [
+      brlItem(d(0), '08:00', '10:00', 'Arrive at airport and pick up rental car', 'Bariloche Airport (BRC)', 1800, 'commute'),
+      brlItem(d(0), '18:00', '19:00', 'Bariloche stay', 'Bariloche accommodation', 1500, 'accommodation'),
+      brlItem(d(0), '20:00', '22:00', 'Vegetarian dinner', 'Ren Vegetariano, Bariloche', null, 'food', [{ label: 'Restaurant details', url: 'https://www.tripadvisor.com/Restaurant_Review-g312848-d6678521-Reviews-Ren_Vegetariano-San_Carlos_de_Bariloche_Province_of_Rio_Negro_Patagonia.html' }]),
+      brlItem(d(1), '09:00', '14:00', 'Circuito Chico', 'Circuito Chico, Bariloche', 0, 'activity'),
+      brlItem(d(1), '14:00', '15:30', 'Vegetarian lunch', 'Restaurante Punto Panorámico, Bariloche', null, 'food', [{ label: 'Restaurant details', url: 'https://www.tripadvisor.com/Restaurant_Review-g312848-d2388398-Reviews-Restaurant_Punto_Panoramico-San_Carlos_de_Bariloche_Province_of_Rio_Negro_Patagonia.html' }]),
+      brlItem(d(1), '20:00', '22:00', 'Vegetarian dinner', 'Quiven Patagonia House Kitchen, Bariloche', null, 'food', [{ label: 'Restaurant details', url: 'https://www.tripadvisor.com/Restaurant_Review-g312848-d14024385-Reviews-Quiven_Patagonia_House_Kitchen-San_Carlos_de_Bariloche_Province_of_Rio_Negro_Patagonia.html' }]),
+      brlItem(d(2), '09:00', '14:00', 'Cascada Los Alerces', 'Cascada Los Alerces, Bariloche', 0, 'activity'),
+      brlItem(d(2), '14:00', '15:30', 'Vegetarian lunch', 'Almacén de Sabores, Bariloche', null, 'food', [{ label: 'Restaurant details', url: 'https://www.tripadvisor.com/Restaurant_Review-g312848-d2012566-Reviews-Almazen_de_Sabores-San_Carlos_de_Bariloche_Province_of_Rio_Negro_Patagonia.html' }]),
+      brlItem(d(3), '14:00', '18:00', 'Drive Ruta de los 7 Lagos to Villa La Angostura', 'Ruta de los 7 Lagos', null, 'commute'),
+      brlItem(d(3), '18:00', '19:00', 'Villa La Angostura stay', 'Villa La Angostura accommodation', 1800, 'accommodation'),
+      brlItem(d(3), '20:00', '22:00', 'Vegetarian dinner', "Pistach', Villa La Angostura", null, 'food', [{ label: 'Restaurant details', url: 'https://www.tripadvisor.com/Restaurant_Review-g312844-d7597555-Reviews-Pistach-Villa_La_Angostura_Province_of_Neuquen_Patagonia.html' }]),
+      brlItem(d(4), '13:00', '14:30', 'Vegetarian lunch', 'Nanuko Cervecería, Villa La Angostura', null, 'food', [{ label: 'Restaurant details', url: 'https://www.tripadvisor.com/Restaurant_Review-g312844-d2640310-Reviews-Nanuko_Cerveceria-Villa_La_Angostura_Province_of_Neuquen_Patagonia.html' }]),
+      brlItem(d(4), '20:00', '22:00', 'Vegetarian dinner', 'Tinto Bistro, Villa La Angostura', null, 'food', [{ label: 'Restaurant details', url: 'https://www.tripadvisor.com/Restaurant_Review-g312844-d1412962-Reviews-Tinto_Bistro-Villa_La_Angostura_Province_of_Neuquen_Patagonia.html' }]),
+      brlItem(d(5), '13:00', '14:30', 'Vegetarian lunch', 'La Crepe, Villa La Angostura', null, 'food', [{ label: 'Restaurant details', url: 'https://www.tripadvisor.com/Restaurant_Review-g312844-d11644559-Reviews-La_Crepe-Villa_La_Angostura_Province_of_Neuquen_Patagonia.html' }]),
+      brlItem(d(5), '20:00', '22:00', 'Vegetarian dinner', 'Waldhaus Cocina del Bosque, Villa La Angostura', null, 'food', [{ label: 'Restaurant details', url: 'https://www.tripadvisor.com/Restaurant_Review-g312844-d1205867-Reviews-Waldhaus_Cocina_del_Bosque-Villa_La_Angostura_Province_of_Neuquen_Patagonia.html' }]),
+      brlItem(d(6), '13:00', '14:30', 'Vegetarian lunch', 'Vientos Verdes, Villa La Angostura', null, 'food', [{ label: 'Restaurant details', url: 'https://www.tripadvisor.com/Restaurant_Review-g312844-d4233123-Reviews-Vientos_Verdes-Villa_La_Angostura_Province_of_Neuquen_Patagonia.html' }]),
+      brlItem(d(6), '20:00', '22:00', 'Vegetarian dinner', 'Ay Ay Ay María, Villa La Angostura', null, 'food', [{ label: 'Restaurant details', url: 'https://www.tripadvisor.com/Restaurant_Review-g312844-d3171513-Reviews-Ay_Ay_Ay_Maria-Villa_La_Angostura_Province_of_Neuquen_Patagonia.html' }]),
+      brlItem(d(7), '09:00', '12:00', 'To airport', 'Bariloche Airport (BRC)', null, 'commute'),
+    ],
+  };
+};
 // Anchor the example trips far in the future so they don't collide with the
 // user's actual plans, but recent enough that the calendar is still relevant.
 const seedStart = () => {
@@ -1492,4 +1578,5 @@ export const exampleTrips = () => [
   italy(seedStart()),
   iberic(addDays(seedStart(), 14)),
   brazil(addDays(seedStart(), 35)),
+  bariloche(addDays(seedStart(), 65)),
 ];
